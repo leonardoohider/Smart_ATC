@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart ATC EFB Pro - Fraseologia Comercial Realista & UNICOM</title>
+    <title>Smart ATC EFB Pro - Radar Autônomo Top-Down & Layout PC/Celular</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #090d16;
+            background-color: #060911;
             color: #e2e8f0;
-            overflow-x: hidden;
+            overflow: hidden;
             -webkit-tap-highlight-color: transparent;
         }
         .font-mono {
@@ -28,6 +28,21 @@
         ::-webkit-scrollbar-thumb {
             background: #334155;
             border-radius: 4px;
+        }
+        /* Container Dinâmico: Modo PC (Widescreen 100%) vs Modo Celular (Compacto Vertical) */
+        #app-shell.mode-pc {
+            width: 100vw;
+            height: 100dvh;
+            max-width: none;
+        }
+        #app-shell.mode-mobile {
+            width: 100%;
+            max-width: 440px;
+            height: 100dvh;
+            margin: 0 auto;
+            border-left: 1px solid #1e293b;
+            border-right: 1px solid #1e293b;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.85);
         }
         .pilot-bubble {
             background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
@@ -122,6 +137,13 @@
             font-family: 'JetBrains Mono', monospace;
             display: inline-block;
         }
+        @keyframes pulse-alert {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            50% { transform: scale(1.01); box-shadow: 0 0 25px 4px rgba(16, 185, 129, 0.45); }
+        }
+        .atc-alert-banner {
+            animation: pulse-alert 1.8s infinite;
+        }
         #toast {
             visibility: hidden;
             opacity: 0;
@@ -133,465 +155,506 @@
         }
     </style>
 </head>
-<body class="h-[100dvh] w-screen flex flex-col bg-slate-950 select-none overflow-hidden">
+<body class="w-screen h-[100dvh] bg-slate-950 select-none overflow-hidden">
 
-    <!-- 1. BARRA DE STATUS SUPERIOR COMPACTA (MOBILE & DESKTOP) -->
-    <header class="h-10 bg-slate-900 border-b border-slate-800 px-2.5 md:px-4 flex items-center justify-between shrink-0 z-30">
-        <div class="flex items-center gap-2">
-            <div class="flex items-center gap-1.5 bg-blue-600/20 border border-blue-500/40 text-blue-400 px-2 py-0.5 rounded-md text-[11px] font-extrabold">
-                <i data-lucide="radio-tower" class="w-3.5 h-3.5"></i>
-                <span>SMART ATC</span>
-                <span class="hidden sm:inline">EFB PRO</span>
+    <!-- SHELL PRINCIPAL ADAPTÁVEL (MODO PC WIDESCREEN vs MODO CELULAR VERTICAL) -->
+    <div id="app-shell" class="mode-pc flex flex-col bg-slate-950 overflow-hidden relative">
+
+        <!-- BANNER FLUTUANTE DE ALERTA DE NOVO CONTROLADOR ONLINE -->
+        <div id="new-atc-alert-banner" class="hidden bg-emerald-950/95 border-b-2 border-emerald-400 px-3 py-2 flex items-center justify-between gap-2 z-50 atc-alert-banner">
+            <div class="flex items-center gap-2 text-xs">
+                <span class="bg-emerald-500 text-slate-950 font-extrabold px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                    <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i>
+                    NOVO ATC ONLINE
+                </span>
+                <span id="new-atc-alert-text" class="font-mono font-bold text-emerald-200">---</span>
             </div>
-            <!-- Resumo Rápido da Rota no Mobile -->
-            <div class="flex items-center gap-1 text-[11px] font-mono bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-                <span id="hdr-route-summary" class="text-sky-300 font-bold">SBBE ➔ SBPA</span>
-            </div>
+            <button onclick="fecharBannerNovoAtc()" class="bg-emerald-800 hover:bg-emerald-700 text-white px-2.5 py-0.5 rounded text-xs font-bold">Ciente ✕</button>
         </div>
 
-        <div class="flex items-center gap-1.5 md:gap-2.5 text-[11px] font-mono">
-            <div class="flex items-center gap-1.5 text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                <span id="utc-clock">00:00Z</span>
-                <span class="text-slate-600 hidden sm:inline">|</span>
-                <span id="local-clock" class="text-slate-400 hidden sm:inline">00:00L</span>
-                <span class="text-slate-600">|</span>
-                <span id="greeting-preview" class="text-emerald-400 font-sans font-extrabold uppercase text-[10px] md:text-[11px]">BOA TARDE</span>
-            </div>
-            <button onclick="abrirModalGoAround()" class="bg-rose-600 hover:bg-rose-500 text-white font-sans font-extrabold px-2 md:px-2.5 py-0.5 rounded text-[10px] md:text-xs flex items-center gap-1 shadow-md shadow-rose-950/60 transition" title="Arremetida Imediata">
-                <i data-lucide="alert-octagon" class="w-3 h-3"></i>
-                <span class="hidden xs:inline">ARREMETIDA</span>
-                <span class="xs:hidden">GA</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- 2. BARRA DE CONTROLES COMPACTA (RESPONSIVA PARA CELULAR E PC) -->
-    <section class="bg-slate-900/95 border-b border-slate-800 px-2.5 md:px-4 py-1.5 flex items-center justify-between gap-1.5 overflow-x-auto shrink-0 z-20">
-        
-        <!-- Esquerda: SimBrief + Gavetas de Dados/Radar/Vetoração -->
-        <div class="flex items-center gap-1.5 shrink-0">
-            <!-- SimBrief não salvo -->
-            <div id="simbrief-input-group" class="flex items-center gap-1">
-                <input type="text" id="simbrief-user-input" placeholder="SimBrief ID/User" 
-                    class="bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-md px-2 py-1 text-xs text-white w-28 md:w-36 focus:outline-none">
-                <button onclick="salvarECarregarSimBrief()" class="bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition">
-                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                    <span class="hidden sm:inline">SimBrief</span>
-                </button>
-            </div>
-
-            <!-- SimBrief Salvo (1 Clique) -->
-            <div id="simbrief-saved-group" class="hidden items-center gap-1">
-                <button onclick="carregarSimBriefSalvo()" class="bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition shadow-sm">
-                    <i data-lucide="cloud-download" class="w-3.5 h-3.5"></i>
-                    <span id="btn-simbrief-label">SimBrief</span>
-                </button>
-                <button onclick="editarSimBriefId()" title="Trocar ID SimBrief" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-blue-400 px-1.5 py-1 rounded-md text-[10px] font-mono font-bold flex items-center gap-1">
-                    <span id="saved-simbrief-badge">---</span>
-                    <i data-lucide="edit-3" class="w-3 h-3 text-slate-400"></i>
-                </button>
-            </div>
-
-            <button onclick="carregarVooDemonstracao()" class="bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition" title="Carregar Rota Demo">
-                <i data-lucide="plane" class="w-3.5 h-3.5"></i>
-                <span class="hidden md:inline">Demo</span>
-            </button>
-
-            <!-- Botão Gaveta Saída/Chegada -->
-            <button onclick="togglePainelDados()" id="btn-toggle-briefing" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition">
-                <i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400"></i>
-                <span class="hidden sm:inline">Dados</span>
-                <span id="missing-count-badge" class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1 rounded text-[10px] font-mono">0</span>
-            </button>
-
-            <!-- Botão Gaveta Radar ATC -->
-            <button onclick="togglePainelAtc()" id="btn-toggle-atc" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition">
-                <i data-lucide="radar" class="w-3.5 h-3.5 text-emerald-400"></i>
-                <span class="hidden sm:inline">ATC</span>
-                <span id="online-atc-count-badge" class="bg-slate-700 text-slate-300 px-1.5 rounded text-[10px] font-mono">0 ON</span>
-            </button>
-
-            <!-- Botão Vetoração / WX -->
-            <button onclick="togglePainelTatico()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition">
-                <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i>
-                <span class="hidden lg:inline">Vetoração</span>
-            </button>
-        </div>
-
-        <!-- Direita: Estilo 1-5, Modo Auto/Torre/UNICOM, Rede e Idioma -->
-        <div class="flex items-center gap-1.5 shrink-0">
-            <!-- Seletor de Estilo 1 a 5 -->
-            <div class="flex items-center bg-slate-950 border border-emerald-500/40 rounded-md p-0.5 text-xs">
-                <button onclick="sortearVariacao()" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 px-1.5 py-0.5 rounded font-bold" title="Variar Estilo de Fala">🎲</button>
-                <select id="select-style-mode" onchange="selecionarEstiloFala(this.value)" class="bg-transparent text-emerald-400 font-mono font-bold px-1 py-0.5 focus:outline-none cursor-pointer text-[11px] max-w-[115px] sm:max-w-none">
-                    <option value="0" class="bg-slate-900 text-white">1/5 Comercial (Azul/LATAM)</option>
-                    <option value="1" class="bg-slate-900 text-white">2/5 Veterano (Curto)</option>
-                    <option value="2" class="bg-slate-900 text-white">3/5 Copiloto (Cortês)</option>
-                    <option value="3" class="bg-slate-900 text-white">4/5 Ponte Aérea (Ágil)</option>
-                    <option value="4" class="bg-slate-900 text-white">5/5 Padrão DECEA</option>
-                </select>
-            </div>
-
-            <!-- Modo ATC: AUTO (Padrão!), TORRE ou UNICOM -->
-            <div class="flex items-center bg-slate-950 p-0.5 rounded-md border border-slate-800 text-[11px]">
-                <button onclick="setModoATC('AUTO')" id="mode-auto" class="px-2 py-0.5 rounded font-bold transition bg-blue-600 text-white" title="Detecta automaticamente se há ATC online na IVAO/VATSIM. Se não houver, usa UNICOM 122.800">⚡ Auto Rede</button>
-                <button onclick="setModoATC('ONLINE')" id="mode-online" class="px-2 py-0.5 rounded font-semibold transition text-slate-400 hover:text-white" title="Forçar exibição do diálogo com Torre em todas as fases">🗼 Torre</button>
-                <button onclick="setModoATC('UNICOM')" id="mode-unicom" class="px-2 py-0.5 rounded font-semibold transition text-slate-400 hover:text-white" title="Forçar Coordenação Livre UNICOM 122.800 em todas as fases">📻 UNICOM</button>
-            </div>
-
-            <!-- Rede IVAO / VATSIM -->
-            <div class="flex items-center bg-slate-950 p-0.5 rounded-md border border-slate-800 text-[11px]">
-                <button onclick="setRede('IVAO')" id="net-ivao" class="px-1.5 py-0.5 rounded font-bold transition bg-slate-800 text-emerald-400 border border-emerald-500/30">IVAO</button>
-                <button onclick="setRede('VATSIM')" id="net-vatsim" class="px-1.5 py-0.5 rounded font-bold transition text-slate-400 hover:text-white">VATSIM</button>
-            </div>
-
-            <!-- Idioma das Falas -->
-            <div class="flex items-center bg-slate-950 p-0.5 rounded-md border border-slate-700 text-[11px]">
-                <button onclick="setIdiomaFalas('PT')" id="lang-pt" class="px-1.5 py-0.5 rounded font-bold transition bg-emerald-600 text-white">PT</button>
-                <button onclick="setIdiomaFalas('EN')" id="lang-en" class="px-1.5 py-0.5 rounded font-bold transition text-slate-400 hover:text-white">EN</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- 3. PAINEL DE RADAR ATC (MOSTRA QUEM ESTÁ REALMENTE ONLINE NA API + BOTÃO SIMULAR) -->
-    <section id="atc-available-panel" class="hidden bg-slate-900/95 border-b border-slate-800 px-3 md:px-4 py-2 shrink-0 z-10">
-        <div class="max-w-7xl mx-auto">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="radio" class="w-4 h-4 text-emerald-400"></i>
-                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Radar ATC em Tempo Real (<span id="lbl-active-network">IVAO</span>)</span>
-                    <span id="radar-status-msg" class="text-[11px] text-slate-400">Verificando controladores conectados...</span>
+        <!-- 1. BARRA DE STATUS SUPERIOR + SELETOR DE DISPOSITIVO (PC / CELULAR) + RADAR AUTÔNOMO -->
+        <header class="h-11 bg-slate-900 border-b border-slate-800 px-2.5 md:px-4 flex items-center justify-between gap-2 shrink-0 z-30">
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5 bg-blue-600/20 border border-blue-500/40 text-blue-400 px-2 py-0.5 rounded-md text-[11px] font-extrabold">
+                    <i data-lucide="radio-tower" class="w-3.5 h-3.5"></i>
+                    <span id="brand-title">SMART ATC PRO</span>
                 </div>
-                <div class="flex items-center gap-1.5">
-                    <button onclick="togglePhoneticTaxi()" id="btn-phonetic-taxi" class="text-[10px] bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">🔤 Táxi Fonético: ON</button>
-                    <button onclick="togglePhoneticNumbers()" id="btn-phonetic-numbers" class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded font-bold">🔢 Números: OFF</button>
-                    <button onclick="verificarRedesOnline()" class="text-[11px] bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-0.5 rounded font-bold flex items-center gap-1 transition">
-                        <i data-lucide="refresh-cw" class="w-3 h-3" id="icon-refresh-atc"></i>
-                        <span>Buscar API Agora</span>
+
+                <!-- SELETOR EXPLÍCITO DE DISPOSITIVO: MODO PC vs MODO CELULAR -->
+                <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-700 text-[11px]">
+                    <button onclick="setDeviceMode('PC')" id="btn-device-pc" class="px-2 py-0.5 rounded-md font-bold flex items-center gap-1 transition bg-blue-600 text-white" title="Otimizar layout para Monitor de PC (Widescreen)">
+                        <i data-lucide="monitor" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">PC</span>
+                    </button>
+                    <button onclick="setDeviceMode('MOBILE')" id="btn-device-mobile" class="px-2 py-0.5 rounded-md font-bold flex items-center gap-1 transition text-slate-400 hover:text-white" title="Otimizar layout para tela vertical de Celular">
+                        <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Celular</span>
                     </button>
                 </div>
-            </div>
 
-            <div id="atc-cards-container" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5"></div>
-        </div>
-    </section>
-
-    <!-- 4. PAINEL TÁTICO DE VETORAÇÃO & DESVIO WX -->
-    <section id="tactical-panel" class="hidden bg-slate-900 border-b border-amber-500/40 px-3 md:px-4 py-2 shrink-0 z-10">
-        <div class="max-w-7xl mx-auto">
-            <div class="flex items-center justify-between mb-1.5">
-                <span class="text-xs font-extrabold uppercase text-amber-400">⚡ Respostas Rápidas de Vetoração Radar & Meteorologia</span>
-                <button onclick="togglePainelTatico()" class="text-xs text-slate-400 hover:text-white">Fechar ✕</button>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-bold text-amber-300">1. PROA (HDG)</span>
-                        <select id="tac-turn-dir" onchange="renderizarFrasesTaticas()" class="bg-slate-900 border border-slate-700 rounded px-1 text-[10px] text-white">
-                            <option value="DIREITA">Curva Direita</option>
-                            <option value="ESQUERDA">Curva Esquerda</option>
-                            <option value="MANTÉM">Mantendo Proa</option>
-                        </select>
-                    </div>
-                    <div class="flex gap-1">
-                        <input type="text" data-atc-field="tacHdg" id="inp-tac-hdg" value="250" maxlength="3" onfocus="abrirQuickPadPara('tacHdg', 'Proa Radar', 'NUM')" oninput="atualizarCampoTatico('tacHdg', this.value)" class="unicom-input text-center">
-                        <button onclick="falarTextoId('tac-out-hdg')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
-                    </div>
-                    <div id="tac-out-hdg" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
-                </div>
-
-                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-bold text-amber-300">2. VELOCIDADE</span>
-                        <select id="tac-spd-mode" onchange="renderizarFrasesTaticas()" class="bg-slate-900 border border-slate-700 rounded px-1 text-[10px] text-white">
-                            <option value="REDUZ">Reduzindo p/</option>
-                            <option value="MANTÉM">Mantendo</option>
-                            <option value="LIVRE">Vel. Livre</option>
-                        </select>
-                    </div>
-                    <div class="flex gap-1">
-                        <input type="text" data-atc-field="tacSpd" id="inp-tac-spd" value="210" maxlength="3" onfocus="abrirQuickPadPara('tacSpd', 'Velocidade (Nós)', 'NUM')" oninput="atualizarCampoTatico('tacSpd', this.value)" class="unicom-input text-center">
-                        <button onclick="falarTextoId('tac-out-spd')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
-                    </div>
-                    <div id="tac-out-spd" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
-                </div>
-
-                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-bold text-amber-300">3. DIRETO FIXO (DCT)</span>
-                        <span class="text-[10px] font-mono text-slate-400">RNAV</span>
-                    </div>
-                    <div class="flex gap-1">
-                        <input type="text" data-atc-field="tacFix" id="inp-tac-fix" value="LEMIS" maxlength="7" onfocus="abrirQuickPadPara('tacFix', 'Fixo RNAV', 'ALPHA')" oninput="atualizarCampoTatico('tacFix', this.value)" class="unicom-input text-center uppercase">
-                        <button onclick="falarTextoId('tac-out-fix')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
-                    </div>
-                    <div id="tac-out-fix" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
-                </div>
-
-                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-bold text-amber-300">4. DESVIO WX</span>
-                        <select id="tac-wx-dir" onchange="renderizarFrasesTaticas()" class="bg-slate-900 border border-slate-700 rounded px-1 text-[10px] text-white">
-                            <option value="DIREITA">à Direita</option>
-                            <option value="ESQUERDA">à Esquerda</option>
-                        </select>
-                    </div>
-                    <div class="flex gap-1">
-                        <input type="text" data-atc-field="tacWxMiles" id="inp-tac-wx" value="15" maxlength="2" onfocus="abrirQuickPadPara('tacWxMiles', 'Milhas de Desvio', 'NUM')" oninput="atualizarCampoTatico('tacWxMiles', this.value)" class="unicom-input text-center">
-                        <button onclick="falarTextoId('tac-out-wx')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
-                    </div>
-                    <div id="tac-out-wx" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
+                <!-- Indicador do Radar Autônomo + Botão Som -->
+                <div class="flex items-center gap-1 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-lg text-[10px] font-mono">
+                    <button onclick="toggleAudioAlert()" id="btn-sound-alert" class="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1" title="Ativar/Desativar Som quando entrar controlador online">
+                        <i data-lucide="volume-2" id="icon-sound-alert" class="w-3.5 h-3.5"></i>
+                        <span id="lbl-sound-status" class="hidden md:inline">Som ON</span>
+                    </button>
+                    <span class="text-slate-700">|</span>
+                    <span class="text-slate-400 hidden lg:inline">Auto-Sync:</span>
+                    <span id="auto-sync-countdown" class="text-sky-400 font-bold">45s</span>
+                    <button onclick="testarAlertaSonoroAtc()" class="ml-1 bg-slate-800 hover:bg-slate-700 text-amber-300 px-1.5 py-0.2 rounded text-[9px] font-sans font-bold" title="Testar toque sonoro de entrada de controlador">🔔 Testar</button>
                 </div>
             </div>
-        </div>
-    </section>
 
-    <!-- 5. PAINÉIS DE SAÍDA (ORIGEM) E CHEGADA (DESTINO) - RECOLHÍVEL NO MOBILE -->
-    <section id="briefing-panel" class="hidden md:block bg-slate-900/95 border-b border-slate-800 px-3 md:px-4 py-2 shrink-0 z-10 max-h-[60vh] overflow-y-auto">
-        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+            <div class="flex items-center gap-1.5 text-[11px] font-mono">
+                <div class="flex items-center gap-1.5 text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    <span id="utc-clock">00:00Z</span>
+                    <span id="local-clock" class="text-slate-400 hidden lg:inline">00:00L</span>
+                    <span class="text-slate-600">|</span>
+                    <!-- SAUDAÇÃO SEMPRE EM LETRA MAIÚSCULA -->
+                    <span id="greeting-preview" class="text-emerald-400 font-sans font-extrabold uppercase text-[10px] md:text-[11px]">BOA TARDE</span>
+                </div>
+                <button onclick="abrirModalGoAround()" class="bg-rose-600 hover:bg-rose-500 text-white font-sans font-extrabold px-2 py-0.5 rounded text-[10px] md:text-xs flex items-center gap-1 shadow-md shadow-rose-950/60 transition" title="Arremetida Imediata">
+                    <i data-lucide="alert-octagon" class="w-3 h-3"></i>
+                    <span id="lbl-ga-btn">ARREMETIDA</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- 2. BARRA DE CONTROLES OPERACIONAIS -->
+        <section class="bg-slate-900/95 border-b border-slate-800 px-2.5 md:px-4 py-1.5 flex items-center justify-between gap-1.5 overflow-x-auto shrink-0 z-20">
             
-            <!-- CARTÃO A: SAÍDA (ORIGEM) -->
-            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5">
-                <div class="flex flex-wrap items-center justify-between gap-1 mb-1.5 pb-1 border-b border-slate-800/80">
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                        <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-blue-400">Saída (Origem)</h3>
-                    </div>
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <input type="text" id="inp-callsign" value="AZU5874" oninput="atualizarCampo('callsign', this.value.toUpperCase())"
-                            class="w-20 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-white uppercase text-center text-[11px]">
-                        <span id="callsign-spoken-badge" class="bg-blue-500/20 border border-blue-500/40 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">🗣️ Azul 5874</span>
-                        <select id="inp-rules" onchange="atualizarCampo('flightRules', this.value)"
-                            class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-emerald-400 text-[11px]">
-                            <option value="IFR">IFR</option>
-                            <option value="VFR">VFR</option>
-                        </select>
-                        <button onclick="limparCamposAtc()" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30" title="Limpar campos em branco">Limpar</button>
-                    </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <!-- SimBrief não salvo -->
+                <div id="simbrief-input-group" class="flex items-center gap-1">
+                    <input type="text" id="simbrief-user-input" placeholder="SimBrief User/ID" 
+                        class="bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-md px-2 py-1 text-xs text-white w-28 md:w-36 focus:outline-none">
+                    <button onclick="salvarECarregarSimBrief()" class="bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>SimBrief</span>
+                    </button>
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
-                    <div class="col-span-2 bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-                        <label class="block text-[9px] text-slate-400 uppercase font-semibold">Origem (ICAO + Cidade)</label>
-                        <div class="flex gap-1 items-center mt-0.5">
-                            <input type="text" id="inp-dep-icao" value="SBBE" oninput="atualizarIcaoManual('DEP', this.value)" maxlength="4"
-                                class="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono font-bold text-blue-400 uppercase text-center text-[11px]">
-                            <input type="text" id="inp-dep-name" value="BELÉM" oninput="atualizarCampo('depName', this.value.toUpperCase())"
-                                class="w-full bg-transparent font-sans font-bold text-slate-100 uppercase text-[11px]">
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Gate Saída</label>
-                        <input type="text" data-atc-field="depGate" id="inp-dep-gate" value="" onfocus="abrirQuickPadPara('depGate', 'Gate de Saída', 'ALPHA')" oninput="atualizarCampo('depGate', this.value.toUpperCase())" placeholder="(Vazio)"
-                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase text-[11px]">
-                    </div>
-
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Info ATIS</label>
-                        <select id="inp-dep-atis" onchange="atualizarCampo('depAtis', this.value)"
-                            class="w-full bg-slate-900 font-mono font-bold text-white focus:outline-none text-[11px]">
-                            <option value="" selected>(Vazio)</option>
-                            <option value="Alpha">A - Alpha</option>
-                            <option value="Bravo">B - Bravo</option>
-                            <option value="Charlie">C - Charlie</option>
-                            <option value="Delta">D - Delta</option>
-                            <option value="Echo">E - Echo</option>
-                            <option value="Foxtrot">F - Foxtrot</option>
-                            <option value="Golf">G - Golf</option>
-                            <option value="Hotel">H - Hotel</option>
-                            <option value="India">I - India</option>
-                            <option value="Juliet">J - Juliet</option>
-                            <option value="Kilo">K - Kilo</option>
-                            <option value="Lima">L - Lima</option>
-                            <option value="Mike">M - Mike</option>
-                            <option value="November">N - November</option>
-                            <option value="Oscar">O - Oscar</option>
-                            <option value="Papa">P - Papa</option>
-                            <option value="Quebec">Q - Quebec</option>
-                            <option value="Romeo">R - Romeo</option>
-                            <option value="Sierra">S - Sierra</option>
-                            <option value="Tango">T - Tango</option>
-                            <option value="Uniform">U - Uniform</option>
-                            <option value="Victor">V - Victor</option>
-                            <option value="Whiskey">W - Whiskey</option>
-                            <option value="X-Ray">X - X-Ray</option>
-                            <option value="Yankee">Y - Yankee</option>
-                            <option value="Zulu">Z - Zulu</option>
-                        </select>
-                    </div>
-
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-                        <label class="block text-[9px] text-slate-400 uppercase font-semibold">Pista / QNH</label>
-                        <div class="flex items-center gap-1">
-                            <input type="text" id="inp-dep-rwy" value="07" oninput="atualizarCampo('depRwy', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-emerald-400 uppercase text-[11px]">
-                            <span class="text-slate-600">/</span>
-                            <input type="text" id="inp-dep-qnh" value="1013" oninput="atualizarCampo('depQnh', this.value)" class="w-1/2 bg-transparent font-mono font-bold text-slate-200 text-[11px]">
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-                        <label class="block text-[9px] text-slate-400 uppercase font-semibold">SID / Transição</label>
-                        <div class="flex items-center gap-1">
-                            <input type="text" id="inp-sid" value="VULA2A" oninput="atualizarCampo('sid', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-white uppercase text-[11px]">
-                            <span class="text-slate-600">/</span>
-                            <input type="text" id="inp-sid-trans" value="LEMIS" oninput="atualizarCampo('sidTrans', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-slate-300 uppercase text-[11px]">
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Cauda Pushback</label>
-                        <input type="text" data-atc-field="pushTailDir" id="inp-push-tail" value="" onfocus="abrirQuickPadPara('pushTailDir', 'Cauda no Pushback', 'TAIL')" oninput="atualizarCampo('pushTailDir', this.value.toUpperCase())" placeholder="DIREITA/ESQ"
-                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
-                    </div>
-
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Táxi Saída (Via)</label>
-                        <input type="text" data-atc-field="depTaxiways" id="inp-dep-taxiways" value="" onfocus="abrirQuickPadPara('depTaxiways', 'Taxiways de Saída', 'ALPHA')" oninput="atualizarCampo('depTaxiways', this.value.toUpperCase())" placeholder="Ex: A, B"
-                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
-                    </div>
+                <!-- SimBrief Salvo (1 Clique) -->
+                <div id="simbrief-saved-group" class="hidden items-center gap-1">
+                    <button onclick="carregarSimBriefSalvo()" class="bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition shadow-sm">
+                        <i data-lucide="cloud-download" class="w-3.5 h-3.5"></i>
+                        <span id="btn-simbrief-label">SimBrief</span>
+                    </button>
+                    <button onclick="editarSimBriefId()" title="Trocar ID SimBrief" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-blue-400 px-1.5 py-1 rounded-md text-[10px] font-mono font-bold flex items-center gap-1">
+                        <span id="saved-simbrief-badge">---</span>
+                        <i data-lucide="edit-3" class="w-3 h-3 text-slate-400"></i>
+                    </button>
                 </div>
+
+                <button onclick="carregarVooDemonstracao()" class="bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition" title="Alternar Rota Demo">
+                    <i data-lucide="plane" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Demo</span>
+                </button>
+
+                <!-- Botão Gaveta Saída/Chegada -->
+                <button onclick="togglePainelDados()" id="btn-toggle-briefing" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition">
+                    <i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Dados</span>
+                    <span id="missing-count-badge" class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1 rounded text-[10px] font-mono">0</span>
+                </button>
+
+                <!-- Botão Gaveta Radar ATC Top-Down -->
+                <button onclick="togglePainelAtc()" id="btn-toggle-atc" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition">
+                    <i data-lucide="radar" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span>Radar</span>
+                    <span id="online-atc-count-badge" class="bg-slate-700 text-slate-300 px-1.5 rounded text-[10px] font-mono">UNICOM</span>
+                </button>
+
+                <!-- Botão Vetoração / WX -->
+                <button onclick="togglePainelTatico()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition">
+                    <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span class="hidden md:inline">Vetoração</span>
+                </button>
             </div>
 
-            <!-- CARTÃO B: CHEGADA (DESTINO) -->
-            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5">
-                <div class="flex flex-wrap items-center justify-between gap-1 mb-1.5 pb-1 border-b border-slate-800/80">
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">Chegada (Destino)</h3>
+            <!-- Direita: Estilo 1-5, Modo Auto/Torre/UNICOM, Rede e Idioma -->
+            <div class="flex items-center gap-1.5 shrink-0">
+                <div class="flex items-center bg-slate-950 border border-emerald-500/40 rounded-md p-0.5 text-xs">
+                    <button onclick="sortearVariacao()" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 px-1.5 py-0.5 rounded font-bold" title="Sortear Estilo de Fala">🎲</button>
+                    <select id="select-style-mode" onchange="selecionarEstiloFala(this.value)" class="bg-transparent text-emerald-400 font-mono font-bold px-1 py-0.5 focus:outline-none cursor-pointer text-[11px] max-w-[110px] sm:max-w-none">
+                        <option value="0" class="bg-slate-900 text-white">1/5 Comercial (Azul/LATAM)</option>
+                        <option value="1" class="bg-slate-900 text-white">2/5 Veterano (Curto)</option>
+                        <option value="2" class="bg-slate-900 text-white">3/5 Copiloto (Cortês)</option>
+                        <option value="3" class="bg-slate-900 text-white">4/5 Ponte Aérea (Ágil)</option>
+                        <option value="4" class="bg-slate-900 text-white">5/5 Padrão DECEA</option>
+                    </select>
+                </div>
+
+                <!-- Modo ATC: AUTO TOP-DOWN (Padrão), FORÇAR TORRE ou FORÇAR UNICOM -->
+                <div class="flex items-center bg-slate-950 p-0.5 rounded-md border border-slate-800 text-[11px]">
+                    <button onclick="setModoATC('AUTO')" id="mode-auto" class="px-2 py-0.5 rounded font-bold transition bg-blue-600 text-white" title="Detecta sozinho na API e aplica a Regra Top-Down">⚡ Auto</button>
+                    <button onclick="setModoATC('ONLINE')" id="mode-online" class="px-1.5 py-0.5 rounded font-semibold transition text-slate-400 hover:text-white" title="Forçar todos os órgãos ativos">🗼 ON</button>
+                    <button onclick="setModoATC('UNICOM')" id="mode-unicom" class="px-1.5 py-0.5 rounded font-semibold transition text-slate-400 hover:text-white" title="Forçar UNICOM 122.800">📻 UNICOM</button>
+                </div>
+
+                <!-- Rede IVAO / VATSIM -->
+                <div class="flex items-center bg-slate-950 p-0.5 rounded-md border border-slate-800 text-[11px]">
+                    <button onclick="setRede('IVAO')" id="net-ivao" class="px-1.5 py-0.5 rounded font-bold transition bg-slate-800 text-emerald-400 border border-emerald-500/30">IVAO</button>
+                    <button onclick="setRede('VATSIM')" id="net-vatsim" class="px-1.5 py-0.5 rounded font-bold transition text-slate-400 hover:text-white">VATSIM</button>
+                </div>
+
+                <!-- Idioma Exclusivo das Falas -->
+                <div class="flex items-center bg-slate-950 p-0.5 rounded-md border border-slate-700 text-[11px]">
+                    <button onclick="setIdiomaFalas('PT')" id="lang-pt" class="px-1.5 py-0.5 rounded font-bold transition bg-emerald-600 text-white">PT</button>
+                    <button onclick="setIdiomaFalas('EN')" id="lang-en" class="px-1.5 py-0.5 rounded font-bold transition text-slate-400 hover:text-white">EN</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. PAINEL DE RADAR ATC & MATRIZ DE ABSORÇÃO TOP-DOWN -->
+        <section id="atc-available-panel" class="bg-slate-900/95 border-b border-slate-800 px-3 md:px-4 py-2 shrink-0 z-10">
+            <div class="w-full space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
+                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Radar Autônomo Top-Down (<span id="lbl-active-network">IVAO</span>)</span>
+                        <span id="radar-status-msg" class="text-[11px] text-slate-300 font-medium">Sincronizando API...</span>
                     </div>
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-slate-400 text-[10px]">STAR:</span>
-                        <input type="text" id="inp-star" value="GRV1A" oninput="atualizarCampo('star', this.value.toUpperCase())"
-                            class="w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-emerald-300 uppercase text-center text-[11px]">
-                        <span class="text-slate-400 text-[10px]">FL:</span>
-                        <input type="text" id="inp-fl" value="290" oninput="atualizarCampo('cruiseFl', this.value)"
-                            class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-white text-center text-[11px]">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button onclick="aplicarCenarioTopDown('API')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded font-bold">📡 Tempo Real API</button>
+                        <button onclick="aplicarCenarioTopDown('ONLY_CTR')" class="text-[10px] bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded font-bold">🟣 Simular CTR</button>
+                        <button onclick="aplicarCenarioTopDown('ONLY_APP')" class="text-[10px] bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded font-bold">🔵 Simular APP</button>
+                        <button onclick="aplicarCenarioTopDown('ONLY_TWR')" class="text-[10px] bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">🟢 Simular TWR</button>
+                        <button onclick="verificarRedesOnline(false)" class="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded font-bold flex items-center gap-1 transition">
+                            <i data-lucide="refresh-cw" class="w-3 h-3" id="icon-refresh-atc"></i>
+                            <span>Sincronizar</span>
+                        </button>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
-                    <div class="col-span-2 bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-                        <label class="block text-[9px] text-slate-400 uppercase font-semibold">Destino (ICAO + Cidade)</label>
-                        <div class="flex gap-1 items-center mt-0.5">
-                            <input type="text" id="inp-arr-icao" value="SBPA" oninput="atualizarIcaoManual('ARR', this.value)" maxlength="4"
-                                class="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono font-bold text-emerald-400 uppercase text-center text-[11px]">
-                            <input type="text" id="inp-arr-name" value="PORTO ALEGRE" oninput="atualizarCampo('arrName', this.value.toUpperCase())"
-                                class="w-full bg-transparent font-sans font-bold text-slate-100 uppercase text-[11px]">
-                        </div>
-                    </div>
+                <div id="atc-cards-container" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5"></div>
+            </div>
+        </section>
 
-                    <div class="col-span-2 bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Procedimento + Letra</label>
-                        <div class="flex items-center gap-1 mt-0.5">
-                            <select id="inp-app-type" onchange="atualizarCampo('appType', this.value)"
-                                class="w-3/5 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono font-bold text-emerald-400 text-[11px]">
-                                <option value="ILS" selected>ILS</option>
-                                <option value="RNAV">RNAV</option>
-                                <option value="RNP">RNP</option>
-                                <option value="VOR">VOR</option>
-                                <option value="NDB">NDB</option>
-                                <option value="LOC">LOC</option>
-                                <option value="VISUAL">VISUAL</option>
-                            </select>
-                            <select id="inp-app-letter" onchange="atualizarCampo('appLetter', this.value)"
-                                class="w-2/5 bg-slate-950 border border-amber-500/50 rounded px-1 py-0.5 font-mono font-bold text-white text-[11px]">
-                                <option value="" selected>Letra</option>
-                                <option value="Z">Z (Zulu)</option>
-                                <option value="Y">Y (Yankee)</option>
-                                <option value="X">X (X-Ray)</option>
-                                <option value="W">W (Whiskey)</option>
-                                <option value="U">U (Uniform)</option>
-                                <option value="V">V (Victor)</option>
-                                <option value="A">A (Alpha)</option>
-                                <option value="B">B (Bravo)</option>
+        <!-- 4. PAINEL TÁTICO DE VETORAÇÃO & DESVIO WX -->
+        <section id="tactical-panel" class="hidden bg-slate-900 border-b border-amber-500/40 px-3 md:px-4 py-2 shrink-0 z-10">
+            <div class="w-full">
+                <div class="flex items-center justify-between mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-extrabold uppercase text-amber-400">⚡ Vetoração Radar & Desvio WX</span>
+                        <button onclick="togglePhoneticTaxi()" id="btn-phonetic-taxi" class="text-[10px] bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">🔤 Táxi Fonético: ON</button>
+                        <button onclick="togglePhoneticNumbers()" id="btn-phonetic-numbers" class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded font-bold">🔢 Números: OFF</button>
+                    </div>
+                    <button onclick="togglePainelTatico()" class="text-xs text-slate-400 hover:text-white">Fechar ✕</button>
+                </div>
+                <div id="tactical-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-amber-300">1. PROA (HDG)</span>
+                            <select id="tac-turn-dir" onchange="renderizarFrasesTaticas()" class="bg-slate-900 border border-slate-700 rounded px-1 text-[10px] text-white">
+                                <option value="DIREITA">Curva Direita</option>
+                                <option value="ESQUERDA">Curva Esquerda</option>
+                                <option value="MANTÉM">Mantendo Proa</option>
                             </select>
                         </div>
+                        <div class="flex gap-1">
+                            <input type="text" data-atc-field="tacHdg" id="inp-tac-hdg" value="250" maxlength="3" onfocus="abrirQuickPadPara('tacHdg', 'Proa Radar', 'NUM')" oninput="atualizarCampoTatico('tacHdg', this.value)" class="unicom-input text-center">
+                            <button onclick="falarTextoId('tac-out-hdg')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
+                        </div>
+                        <div id="tac-out-hdg" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
                     </div>
 
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-                        <label class="block text-[9px] text-slate-400 uppercase font-semibold">Pista / QNH</label>
-                        <div class="flex items-center gap-1">
-                            <input type="text" id="inp-arr-rwy" value="11" oninput="atualizarCampo('arrRwy', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-emerald-400 uppercase text-[11px]">
-                            <span class="text-slate-600">/</span>
-                            <input type="text" id="inp-arr-qnh" value="1020" oninput="atualizarCampo('arrQnh', this.value)" class="w-1/2 bg-transparent font-mono font-bold text-slate-200 text-[11px]">
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-amber-300">2. VELOCIDADE</span>
+                            <select id="tac-spd-mode" onchange="renderizarFrasesTaticas()" class="bg-slate-900 border border-slate-700 rounded px-1 text-[10px] text-white">
+                                <option value="REDUZ">Reduzindo p/</option>
+                                <option value="MANTÉM">Mantendo</option>
+                                <option value="LIVRE">Vel. Livre</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-1">
+                            <input type="text" data-atc-field="tacSpd" id="inp-tac-spd" value="210" maxlength="3" onfocus="abrirQuickPadPara('tacSpd', 'Velocidade (Nós)', 'NUM')" oninput="atualizarCampoTatico('tacSpd', this.value)" class="unicom-input text-center">
+                            <button onclick="falarTextoId('tac-out-spd')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
+                        </div>
+                        <div id="tac-out-spd" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-amber-300">3. DIRETO FIXO (DCT)</span>
+                            <span class="text-[10px] font-mono text-slate-400">RNAV</span>
+                        </div>
+                        <div class="flex gap-1">
+                            <input type="text" data-atc-field="tacFix" id="inp-tac-fix" value="LEMIS" maxlength="7" onfocus="abrirQuickPadPara('tacFix', 'Fixo RNAV', 'ALPHA')" oninput="atualizarCampoTatico('tacFix', this.value)" class="unicom-input text-center uppercase">
+                            <button onclick="falarTextoId('tac-out-fix')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
+                        </div>
+                        <div id="tac-out-fix" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-amber-300">4. DESVIO WX</span>
+                            <select id="tac-wx-dir" onchange="renderizarFrasesTaticas()" class="bg-slate-900 border border-slate-700 rounded px-1 text-[10px] text-white">
+                                <option value="DIREITA">à Direita</option>
+                                <option value="ESQUERDA">à Esquerda</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-1">
+                            <input type="text" data-atc-field="tacWxMiles" id="inp-tac-wx" value="15" maxlength="2" onfocus="abrirQuickPadPara('tacWxMiles', 'Milhas de Desvio', 'NUM')" oninput="atualizarCampoTatico('tacWxMiles', this.value)" class="unicom-input text-center">
+                            <button onclick="falarTextoId('tac-out-wx')" class="bg-emerald-600/30 px-2 rounded text-emerald-300">🔊</button>
+                        </div>
+                        <div id="tac-out-wx" class="text-[11px] text-slate-200 bg-slate-900 p-1.5 rounded select-text"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. PAINÉIS SEPARADOS DE SAÍDA (ORIGEM) E CHEGADA (DESTINO) -->
+        <section id="briefing-panel" class="bg-slate-900/95 border-b border-slate-800 px-3 md:px-4 py-2 shrink-0 z-10 max-h-[55vh] overflow-y-auto">
+            <div id="briefing-grid" class="w-full grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                
+                <!-- CARTÃO A: SAÍDA (ORIGEM) -->
+                <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-1 mb-1.5 pb-1 border-b border-slate-800/80">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                            <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-blue-400">Saída (Origem)</h3>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <input type="text" id="inp-callsign" value="AZU5874" oninput="atualizarCampo('callsign', this.value.toUpperCase())"
+                                class="w-20 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-white uppercase text-center text-[11px]">
+                            <span id="callsign-spoken-badge" class="bg-blue-500/20 border border-blue-500/40 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">🗣️ Azul 5874</span>
+                            <select id="inp-rules" onchange="atualizarCampo('flightRules', this.value)"
+                                class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-emerald-400 text-[11px]">
+                                <option value="IFR">IFR</option>
+                                <option value="VFR">VFR</option>
+                            </select>
+                            <button onclick="limparCamposAtc()" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">Limpar</button>
                         </div>
                     </div>
 
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Nível Descida</label>
-                        <input type="text" data-atc-field="assignedDescFl" id="inp-desc-fl" value="" onfocus="abrirQuickPadPara('assignedDescFl', 'Nível na Descida', 'NUM')" oninput="atualizarCampo('assignedDescFl', this.value.toUpperCase())" placeholder="Ex: 100"
-                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
-                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+                        <div class="col-span-2 bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                            <label class="block text-[9px] text-slate-400 uppercase font-semibold">Origem (ICAO + Cidade)</label>
+                            <div class="flex gap-1 items-center mt-0.5">
+                                <input type="text" id="inp-dep-icao" value="SBBE" oninput="atualizarIcaoManual('DEP', this.value)" maxlength="4"
+                                    class="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono font-bold text-blue-400 uppercase text-center text-[11px]">
+                                <input type="text" id="inp-dep-name" value="BELÉM" oninput="atualizarCampo('depName', this.value.toUpperCase())"
+                                    class="w-full bg-transparent font-sans font-bold text-slate-100 uppercase text-[11px]">
+                            </div>
+                        </div>
 
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Táxi Chegada</label>
-                        <input type="text" data-atc-field="arrTaxiways" id="inp-arr-taxiways" value="" onfocus="abrirQuickPadPara('arrTaxiways', 'Taxiways Após Pouso', 'ALPHA')" oninput="atualizarCampo('arrTaxiways', this.value.toUpperCase())" placeholder="Ex: C, D"
-                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
-                    </div>
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Gate Saída</label>
+                            <input type="text" data-atc-field="depGate" id="inp-dep-gate" value="" onfocus="abrirQuickPadPara('depGate', 'Gate de Saída', 'ALPHA')" oninput="atualizarCampo('depGate', this.value.toUpperCase())" placeholder="(Vazio)"
+                                class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase text-[11px]">
+                        </div>
 
-                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
-                        <label class="block text-[9px] text-amber-300 uppercase font-semibold">Gate Chegada</label>
-                        <input type="text" data-atc-field="arrGate" id="inp-arr-gate" value="" onfocus="abrirQuickPadPara('arrGate', 'Gate de Chegada', 'ALPHA')" oninput="atualizarCampo('arrGate', this.value.toUpperCase())" placeholder="(Vazio)"
-                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Info ATIS</label>
+                            <select id="inp-dep-atis" onchange="atualizarCampo('depAtis', this.value)"
+                                class="w-full bg-slate-900 font-mono font-bold text-white focus:outline-none text-[11px]">
+                                <option value="" selected>(Vazio)</option>
+                                <option value="Alpha">A - Alpha</option>
+                                <option value="Bravo">B - Bravo</option>
+                                <option value="Charlie">C - Charlie</option>
+                                <option value="Delta">D - Delta</option>
+                                <option value="Echo">E - Echo</option>
+                                <option value="Foxtrot">F - Foxtrot</option>
+                                <option value="Golf">G - Golf</option>
+                                <option value="Hotel">H - Hotel</option>
+                                <option value="India">I - India</option>
+                                <option value="Juliet">J - Juliet</option>
+                                <option value="Kilo">K - Kilo</option>
+                                <option value="Lima">L - Lima</option>
+                                <option value="Mike">M - Mike</option>
+                                <option value="November">N - November</option>
+                                <option value="Oscar">O - Oscar</option>
+                                <option value="Papa">P - Papa</option>
+                                <option value="Quebec">Q - Quebec</option>
+                                <option value="Romeo">R - Romeo</option>
+                                <option value="Sierra">S - Sierra</option>
+                                <option value="Tango">T - Tango</option>
+                                <option value="Uniform">U - Uniform</option>
+                                <option value="Victor">V - Victor</option>
+                                <option value="Whiskey">W - Whiskey</option>
+                                <option value="X-Ray">X - X-Ray</option>
+                                <option value="Yankee">Y - Yankee</option>
+                                <option value="Zulu">Z - Zulu</option>
+                            </select>
+                        </div>
+
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                            <label class="block text-[9px] text-slate-400 uppercase font-semibold">Pista / QNH</label>
+                            <div class="flex items-center gap-1">
+                                <input type="text" id="inp-dep-rwy" value="07" oninput="atualizarCampo('depRwy', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-emerald-400 uppercase text-[11px]">
+                                <span class="text-slate-600">/</span>
+                                <input type="text" id="inp-dep-qnh" value="1013" oninput="atualizarCampo('depQnh', this.value)" class="w-1/2 bg-transparent font-mono font-bold text-slate-200 text-[11px]">
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                            <label class="block text-[9px] text-slate-400 uppercase font-semibold">SID / Transição</label>
+                            <div class="flex items-center gap-1">
+                                <input type="text" id="inp-sid" value="VULA2A" oninput="atualizarCampo('sid', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-white uppercase text-[11px]">
+                                <span class="text-slate-600">/</span>
+                                <input type="text" id="inp-sid-trans" value="LEMIS" oninput="atualizarCampo('sidTrans', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-slate-300 uppercase text-[11px]">
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Cauda Pushback</label>
+                            <input type="text" data-atc-field="pushTailDir" id="inp-push-tail" value="" onfocus="abrirQuickPadPara('pushTailDir', 'Cauda no Pushback', 'TAIL')" oninput="atualizarCampo('pushTailDir', this.value.toUpperCase())" placeholder="DIREITA/ESQ"
+                                class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
+                        </div>
+
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Táxi Saída (Via)</label>
+                            <input type="text" data-atc-field="depTaxiways" id="inp-dep-taxiways" value="" onfocus="abrirQuickPadPara('depTaxiways', 'Taxiways de Saída', 'ALPHA')" oninput="atualizarCampo('depTaxiways', this.value.toUpperCase())" placeholder="Ex: A, B"
+                                class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
+                        </div>
                     </div>
                 </div>
-            </div>
 
-        </div>
-    </section>
+                <!-- CARTÃO B: CHEGADA (DESTINO) -->
+                <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-1 mb-1.5 pb-1 border-b border-slate-800/80">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">Chegada (Destino)</h3>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <span class="text-slate-400 text-[10px]">STAR:</span>
+                            <input type="text" id="inp-star" value="GRV1A" oninput="atualizarCampo('star', this.value.toUpperCase())"
+                                class="w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-emerald-300 uppercase text-center text-[11px]">
+                            <span class="text-slate-400 text-[10px]">FL:</span>
+                            <input type="text" id="inp-fl" value="290" oninput="atualizarCampo('cruiseFl', this.value)"
+                                class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-white text-center text-[11px]">
+                        </div>
+                    </div>
 
-    <!-- 6. ÁREA PRINCIPAL: SIDEBAR DE FASES + CHAT RESPONSIVO + MINI QUICK-PAD CONTEXTUAL -->
-    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        
-        <!-- Sidebar Desktop -->
-        <aside class="w-56 bg-slate-900 border-r border-slate-800 flex-col shrink-0 hidden md:flex">
-            <div class="p-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800 flex items-center justify-between">
-                <span>Fases do Voo</span>
-                <button onclick="resetarProgressoFalas()" class="text-[10px] text-sky-400 hover:underline">Zerar ✔</button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-1.5 space-y-1" id="sidebar-phases"></div>
-        </aside>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+                        <div class="col-span-2 bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                            <label class="block text-[9px] text-slate-400 uppercase font-semibold">Destino (ICAO + Cidade)</label>
+                            <div class="flex gap-1 items-center mt-0.5">
+                                <input type="text" id="inp-arr-icao" value="SBPA" oninput="atualizarIcaoManual('ARR', this.value)" maxlength="4"
+                                    class="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono font-bold text-emerald-400 uppercase text-center text-[11px]">
+                                <input type="text" id="inp-arr-name" value="PORTO ALEGRE" oninput="atualizarCampo('arrName', this.value.toUpperCase())"
+                                    class="w-full bg-transparent font-sans font-bold text-slate-100 uppercase text-[11px]">
+                            </div>
+                        </div>
 
-        <!-- Barra de Fases Mobile (Horizontal Compacta) -->
-        <div class="md:hidden bg-slate-900 border-b border-slate-800 px-2 py-1.5 flex gap-1.5 overflow-x-auto shrink-0" id="mobile-phases"></div>
+                        <div class="col-span-2 bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Procedimento + Letra</label>
+                            <div class="flex items-center gap-1 mt-0.5">
+                                <select id="inp-app-type" onchange="atualizarCampo('appType', this.value)"
+                                    class="w-3/5 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono font-bold text-emerald-400 text-[11px]">
+                                    <option value="ILS" selected>ILS</option>
+                                    <option value="RNAV">RNAV</option>
+                                    <option value="RNP">RNP</option>
+                                    <option value="VOR">VOR</option>
+                                    <option value="NDB">NDB</option>
+                                    <option value="LOC">LOC</option>
+                                    <option value="VISUAL">VISUAL</option>
+                                </select>
+                                <select id="inp-app-letter" onchange="atualizarCampo('appLetter', this.value)"
+                                    class="w-2/5 bg-slate-950 border border-amber-500/50 rounded px-1 py-0.5 font-mono font-bold text-white text-[11px]">
+                                    <option value="" selected>Letra</option>
+                                    <option value="Z">Z (Zulu)</option>
+                                    <option value="Y">Y (Yankee)</option>
+                                    <option value="X">X (X-Ray)</option>
+                                    <option value="W">W (Whiskey)</option>
+                                    <option value="U">U (Uniform)</option>
+                                    <option value="V">V (Victor)</option>
+                                    <option value="A">A (Alpha)</option>
+                                    <option value="B">B (Bravo)</option>
+                                </select>
+                            </div>
+                        </div>
 
-        <!-- Área Central de Diálogos -->
-        <main class="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-6 bg-slate-950" id="chat-scroll-container">
-            <div class="max-w-4xl mx-auto space-y-6 pb-28" id="dialogue-container"></div>
-        </main>
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+                            <label class="block text-[9px] text-slate-400 uppercase font-semibold">Pista / QNH</label>
+                            <div class="flex items-center gap-1">
+                                <input type="text" id="inp-arr-rwy" value="11" oninput="atualizarCampo('arrRwy', this.value.toUpperCase())" class="w-1/2 bg-transparent font-mono font-bold text-emerald-400 uppercase text-[11px]">
+                                <span class="text-slate-600">/</span>
+                                <input type="text" id="inp-arr-qnh" value="1020" oninput="atualizarCampo('arrQnh', this.value)" class="w-1/2 bg-transparent font-mono font-bold text-slate-200 text-[11px]">
+                            </div>
+                        </div>
 
-        <!-- MINI QUICK-PAD CONTEXTUAL ULTRA-COMPACTO (NÃO TAMPA A TELA!) -->
-        <div id="cockpit-quickpad" class="hidden fixed bottom-2 right-2 left-2 sm:left-auto sm:w-[330px] bg-slate-900/98 border border-blue-500 rounded-xl shadow-2xl p-2 z-40 backdrop-blur-md">
-            <!-- Cabeçalho ultra-fino do Quick-Pad -->
-            <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800 text-[11px]">
-                <div class="flex items-center gap-1.5 truncate">
-                    <span class="text-blue-400 font-bold truncate" id="quickpad-target-label">Campo</span>
-                    <span id="quickpad-current-value" class="font-mono font-extrabold text-xs text-amber-300 bg-slate-950 px-1.5 py-0.5 rounded border border-amber-500/40">---</span>
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Nível Descida</label>
+                            <input type="text" data-atc-field="assignedDescFl" id="inp-desc-fl" value="" onfocus="abrirQuickPadPara('assignedDescFl', 'Nível na Descida', 'NUM')" oninput="atualizarCampo('assignedDescFl', this.value.toUpperCase())" placeholder="Ex: 100"
+                                class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
+                        </div>
+
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Táxi Chegada</label>
+                            <input type="text" data-atc-field="arrTaxiways" id="inp-arr-taxiways" value="" onfocus="abrirQuickPadPara('arrTaxiways', 'Taxiways Após Pouso', 'ALPHA')" oninput="atualizarCampo('arrTaxiways', this.value.toUpperCase())" placeholder="Ex: C, D"
+                                class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
+                        </div>
+
+                        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-amber-500/40">
+                            <label class="block text-[9px] text-amber-300 uppercase font-semibold">Gate Chegada</label>
+                            <input type="text" data-atc-field="arrGate" id="inp-arr-gate" value="" onfocus="abrirQuickPadPara('arrGate', 'Gate de Chegada', 'ALPHA')" oninput="atualizarCampo('arrGate', this.value.toUpperCase())" placeholder="(Vazio)"
+                                class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 uppercase text-[11px]">
+                        </div>
+                    </div>
                 </div>
-                <div class="flex items-center gap-1 shrink-0">
-                    <button onclick="alternarAbaQuickPad()" id="qp-mode-switch" class="bg-slate-800 hover:bg-slate-700 text-sky-300 px-1.5 py-0.5 rounded text-[10px] font-mono">123/ABC</button>
-                    <button onclick="quickPadBackspace()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 px-2 py-0.5 rounded text-xs font-bold">⌫</button>
-                    <button onclick="quickPadClear()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 px-1.5 py-0.5 rounded text-[10px] font-bold">Limpar</button>
-                    <button onclick="fecharQuickPad()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">OK</button>
+
+            </div>
+        </section>
+
+        <!-- 6. ÁREA PRINCIPAL: SIDEBAR (MODO PC) + BARRA DESLIZANTE (MODO CELULAR) + TIMELINE DE FALAS -->
+        <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+            
+            <!-- Sidebar Esquerda (Visível no Modo PC) -->
+            <aside id="desktop-sidebar" class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+                <div class="p-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                    <span>Fases & Cobertura</span>
+                    <button onclick="resetarProgressoFalas()" class="text-[10px] text-sky-400 hover:underline">Zerar ✔</button>
                 </div>
-            </div>
+                <div class="flex-1 overflow-y-auto p-1.5 space-y-1" id="sidebar-phases"></div>
+                <div class="p-2.5 border-t border-slate-800 bg-slate-950/70 text-[10px] text-slate-400 space-y-1">
+                    <div class="flex items-center gap-1.5 text-emerald-400 font-bold">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                        <span>Radar Autônomo Ativo</span>
+                    </div>
+                    <p>Quando uma torre/controle entra online na sua rota, um alerta sonoro SELCAL toca automaticamente.</p>
+                </div>
+            </aside>
 
-            <!-- Modo 1: Somente Números (Squawk, FL, Altitude, QNH) -->
-            <div id="qp-section-num" class="grid grid-cols-10 gap-1"></div>
+            <!-- Barra de Fases Horizontal (Visível no Modo Celular) -->
+            <div id="mobile-phase-bar" class="hidden bg-slate-900 border-b border-slate-800 px-2 py-1.5 flex gap-1.5 overflow-x-auto shrink-0"></div>
 
-            <!-- Modo 2: Letras Compactas (Taxiways, Gate, Fixos) -->
-            <div id="qp-section-alpha" class="hidden space-y-1">
-                <div class="grid grid-cols-9 gap-1" id="qp-letters-grid"></div>
-                <div class="grid grid-cols-10 gap-1 pt-1 border-t border-slate-800/80" id="qp-alpha-numbers"></div>
-            </div>
+            <!-- Área Central de Diálogos -->
+            <main class="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-6 bg-slate-950" id="chat-scroll-container">
+                <div id="dialogue-container" class="w-full max-w-5xl mx-auto space-y-6 pb-28"></div>
+            </main>
 
-            <!-- Modo 3: escolhas Rápidas (Cauda Pushback / Restrição Subida) -->
-            <div id="qp-section-choices" class="hidden grid grid-cols-2 gap-1 text-[11px]">
-                <button onclick="quickPadSetFull('DIREITA')" class="bg-slate-800 hover:bg-blue-600 text-white py-1.5 rounded font-bold">⬅ Cauda DIREITA</button>
-                <button onclick="quickPadSetFull('ESQUERDA')" class="bg-slate-800 hover:bg-blue-600 text-white py-1.5 rounded font-bold">Cauda ESQUERDA ➡</button>
-                <button onclick="quickPadSetFull('A CRITÉRIO')" class="bg-slate-800 hover:bg-blue-600 text-slate-200 py-1.5 rounded font-bold">A CRITÉRIO</button>
-                <button onclick="quickPadSetFull('SEM RESTRIÇÕES')" class="bg-slate-800 hover:bg-emerald-600 text-emerald-300 py-1.5 rounded font-bold">SEM RESTRIÇÕES</button>
+            <!-- MINI QUICK-PAD CONTEXTUAL ULTRA-COMPACTO -->
+            <div id="cockpit-quickpad" class="hidden fixed bottom-2 right-2 left-2 sm:left-auto sm:w-[330px] bg-slate-900/98 border border-blue-500 rounded-xl shadow-2xl p-2 z-40 backdrop-blur-md">
+                <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800 text-[11px]">
+                    <div class="flex items-center gap-1.5 truncate">
+                        <span class="text-blue-400 font-bold truncate" id="quickpad-target-label">Campo</span>
+                        <span id="quickpad-current-value" class="font-mono font-extrabold text-xs text-amber-300 bg-slate-950 px-1.5 py-0.5 rounded border border-amber-500/40">---</span>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="alternarAbaQuickPad()" class="bg-slate-800 hover:bg-slate-700 text-sky-300 px-1.5 py-0.5 rounded text-[10px] font-mono">123/ABC</button>
+                        <button onclick="quickPadBackspace()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 px-2 py-0.5 rounded text-xs font-bold">⌫</button>
+                        <button onclick="quickPadClear()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 px-1.5 py-0.5 rounded text-[10px] font-bold">Limpar</button>
+                        <button onclick="fecharQuickPad()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">OK</button>
+                    </div>
+                </div>
+
+                <div id="qp-section-num" class="grid grid-cols-10 gap-1"></div>
+
+                <div id="qp-section-alpha" class="hidden space-y-1">
+                    <div class="grid grid-cols-9 gap-1" id="qp-letters-grid"></div>
+                    <div class="grid grid-cols-10 gap-1 pt-1 border-t border-slate-800/80" id="qp-alpha-numbers"></div>
+                </div>
+
+                <div id="qp-section-choices" class="hidden grid grid-cols-2 gap-1 text-[11px]">
+                    <button onclick="quickPadSetFull('DIREITA')" class="bg-slate-800 hover:bg-blue-600 text-white py-1.5 rounded font-bold">⬅ Cauda DIREITA</button>
+                    <button onclick="quickPadSetFull('ESQUERDA')" class="bg-slate-800 hover:bg-blue-600 text-white py-1.5 rounded font-bold">Cauda ESQUERDA ➡</button>
+                    <button onclick="quickPadSetFull('A CRITÉRIO')" class="bg-slate-800 hover:bg-blue-600 text-slate-200 py-1.5 rounded font-bold">A CRITÉRIO</button>
+                    <button onclick="quickPadSetFull('SEM RESTRIÇÕES')" class="bg-slate-800 hover:bg-emerald-600 text-emerald-300 py-1.5 rounded font-bold">SEM RESTRIÇÕES</button>
+                </div>
             </div>
         </div>
     </div>
@@ -621,7 +684,7 @@
             <div class="space-y-2">
                 <div class="bg-rose-950/40 border border-rose-500/50 rounded-xl p-3">
                     <div class="flex items-center justify-between text-[11px] font-bold text-rose-300 uppercase mb-1">
-                        <span>🗼 Com Torre</span>
+                        <span>🗼 Com Controle / Torre</span>
                         <button onclick="falarTextoId('ga-tower-text')" class="bg-rose-600 px-2 py-0.5 rounded text-white">🔊 Ouvir</button>
                     </div>
                     <p id="ga-tower-text" class="text-sm font-bold text-white select-text"></p>
@@ -646,7 +709,7 @@
 
     <script>
         // ============================================================================
-        // 1. DICIONÁRIOS FONÉTICOS, COMPANHIAS E FIRs (CENTROS RADAR)
+        // 1. DICIONÁRIOS FONÉTICOS, COMPANHIAS E JURISDIÇÕES TMA / FIR (TOP-DOWN)
         // ============================================================================
         const icaoPhoneticMap = {
             'A': 'Alpha', 'B': 'Bravo', 'C': 'Charlie', 'D': 'Delta',
@@ -677,17 +740,56 @@
             'PDV': { pt: 'Perna do Vento', en: 'Perna do Vento' }
         };
 
-        // Mapeamento de Aeroportos para FIR (Centro Radar) para detecção precisa na API
-        function obterFirPorIcao(icao) {
+        const tmaJurisdictionMap = {
+            'SBGR': { prefixes: ['SBXP', 'SBSP', 'SBGR'], namePt: 'Controle São Paulo', nameEn: 'São Paulo Control', defaultCs: 'SBXP_APP', defaultFreq: '129.750' },
+            'SBSP': { prefixes: ['SBXP', 'SBSP', 'SBGR'], namePt: 'Controle São Paulo', nameEn: 'São Paulo Control', defaultCs: 'SBXP_APP', defaultFreq: '129.750' },
+            'SBMT': { prefixes: ['SBXP', 'SBSP'], namePt: 'Controle São Paulo', nameEn: 'São Paulo Control', defaultCs: 'SBXP_APP', defaultFreq: '129.750' },
+            'SBKP': { prefixes: ['SBXP', 'SBKP', 'SBSP'], namePt: 'Controle São Paulo', nameEn: 'São Paulo Control', defaultCs: 'SBXP_APP', defaultFreq: '129.750' },
+            'SBGL': { prefixes: ['SBWJ', 'SBRJ', 'SBGL'], namePt: 'Controle Rio', nameEn: 'Rio Control', defaultCs: 'SBWJ_APP', defaultFreq: '119.000' },
+            'SBRJ': { prefixes: ['SBWJ', 'SBRJ', 'SBGL'], namePt: 'Controle Rio', nameEn: 'Rio Control', defaultCs: 'SBWJ_APP', defaultFreq: '119.000' },
+            'SBJR': { prefixes: ['SBWJ', 'SBRJ', 'SBGL'], namePt: 'Controle Rio', nameEn: 'Rio Control', defaultCs: 'SBWJ_APP', defaultFreq: '119.000' },
+            'SBCF': { prefixes: ['SBWH', 'SBCF', 'SBBH'], namePt: 'Controle Belo Horizonte', nameEn: 'Belo Horizonte Control', defaultCs: 'SBWH_APP', defaultFreq: '119.100' },
+            'SBBH': { prefixes: ['SBWH', 'SBCF', 'SBBH'], namePt: 'Controle Belo Horizonte', nameEn: 'Belo Horizonte Control', defaultCs: 'SBWH_APP', defaultFreq: '119.100' },
+            'SBBR': { prefixes: ['SBWR', 'SBBR'], namePt: 'Controle Brasília', nameEn: 'Brasília Control', defaultCs: 'SBWR_APP', defaultFreq: '119.200' },
+            'SBCT': { prefixes: ['SBWT', 'SBCT'], namePt: 'Controle Curitiba', nameEn: 'Curitiba Control', defaultCs: 'SBWT_APP', defaultFreq: '119.950' },
+            'SBPA': { prefixes: ['SBWP', 'SBPA'], namePt: 'Controle Porto Alegre', nameEn: 'Porto Alegre Control', defaultCs: 'SBWP_APP', defaultFreq: '119.000' },
+            'SBBE': { prefixes: ['SBWB', 'SBBE'], namePt: 'Controle Belém', nameEn: 'Belém Control', defaultCs: 'SBWB_APP', defaultFreq: '119.050' },
+            'SBEG': { prefixes: ['SBWM', 'SBWN', 'SBEG'], namePt: 'Controle Manaus', nameEn: 'Manaus Control', defaultCs: 'SBWM_APP', defaultFreq: '119.700' },
+            'SBRF': { prefixes: ['SBWF', 'SBRF'], namePt: 'Controle Recife', nameEn: 'Recife Control', defaultCs: 'SBWF_APP', defaultFreq: '119.700' },
+            'SBSV': { prefixes: ['SBWS', 'SBSV'], namePt: 'Controle Salvador', nameEn: 'Salvador Control', defaultCs: 'SBWS_APP', defaultFreq: '119.800' },
+            'SBFZ': { prefixes: ['SBWZ', 'SBFZ'], namePt: 'Controle Fortaleza', nameEn: 'Fortaleza Control', defaultCs: 'SBWZ_APP', defaultFreq: '119.200' }
+        };
+
+        function obterInfoFir(icao) {
             const code = (icao || '').toUpperCase();
-            if (['SBBE','SBEG','SBMQ','SBSN','SBSL','SBPV','SBRB','SBBV'].includes(code)) return 'SBAZ';
-            if (['SBPA','SBCT','SBFL','SBNF','SBJV','SBFI','SBLO','SBMG','SBCX','SBCH'].includes(code)) return 'SBCW';
-            if (['SBRF','SBSV','SBFZ','SBMO','SBSG','SBNT','SBJP','SBAR','SBTE','SBPS','SBIL'].includes(code)) return 'SBRE';
-            if (code.startsWith('SB')) return 'SBBS';
-            if (code.startsWith('LP')) return 'LPPC';
-            if (code.startsWith('LF')) return 'LFFF';
-            if (code.startsWith('LE')) return 'LECM';
-            return code.substring(0, 2);
+            if (['SBBE','SBEG','SBMQ','SBSN','SBSL','SBPV','SBRB','SBBV','SBCY','SBMA'].includes(code)) {
+                return { code: 'SBAZ', namePt: 'Centro Amazônico', nameEn: 'Amazonico Center', freq: '125.050' };
+            }
+            if (['SBPA','SBCT','SBFL','SBNF','SBJV','SBFI','SBLO','SBMG','SBCX','SBCH','SBCG','SBGL','SBRJ','SBJR','SBVT'].includes(code)) {
+                return { code: 'SBCW', namePt: 'Centro Curitiba', nameEn: 'Curitiba Center', freq: '126.150' };
+            }
+            if (['SBRF','SBSV','SBFZ','SBMO','SBSG','SBNT','SBJP','SBAR','SBTE','SBPS','SBIL'].includes(code)) {
+                return { code: 'SBRE', namePt: 'Centro Recife', nameEn: 'Recife Center', freq: '123.850' };
+            }
+            if (code.startsWith('SB')) {
+                return { code: 'SBBS', namePt: 'Centro Brasília', nameEn: 'Brasília Center', freq: '125.200' };
+            }
+            if (code.startsWith('LP')) {
+                return { code: 'LPPC', namePt: 'Controle Lisboa', nameEn: 'Lisbon Control', freq: '132.150' };
+            }
+            return { code: `${code.substring(0,2)}CTR`, namePt: 'Centro Radar', nameEn: 'Radar Center', freq: '125.200' };
+        }
+
+        function obterInfoTma(icao, radioName) {
+            const code = (icao || '').toUpperCase();
+            if (tmaJurisdictionMap[code]) return tmaJurisdictionMap[code];
+            return {
+                prefixes: [code],
+                namePt: `Controle ${radioName}`,
+                nameEn: `${radioName} Control`,
+                defaultCs: `${code}_APP`,
+                defaultFreq: '120.450'
+            };
         }
 
         const airportLocationDatabase = {
@@ -721,19 +823,23 @@
         };
 
         // ============================================================================
-        // 2. ESTADO GLOBAL (ATC INICIA 100% OFFLINE ATÉ A API DETECTAR!)
+        // 2. ESTADO GLOBAL DO SISTEMA
         // ============================================================================
         const state = {
+            deviceMode: 'PC',         // 'PC' (Widescreen Monitor) ou 'MOBILE' (Smartphone Vertical)
+            audioAlertEnabled: true,  // Som SELCAL quando entra controlador online
+            autoSyncIntervalSec: 45,  // Busca autônoma na API a cada 45 segundos
+            autoSyncCountdown: 45,
+            knownOnlineCallsigns: new Set(),
+            firstApiSyncDone: false,
+
             speechLang: 'PT',
             network: 'IVAO',
-            atcMode: 'AUTO',          // 'AUTO' (Usa dados reais da API), 'ONLINE' (Força Torre), 'UNICOM' (Força 122.800)
+            atcMode: 'AUTO',
             selectedPhase: 'ALL',
             variationIndex: 0,
             phoneticTaxi: true,
             phoneticNumbers: false,
-            briefingOpen: window.innerWidth >= 768,
-            atcPanelOpen: false,
-            tacticalOpen: false,
             quickPadOpen: false,
             quickPadField: 'depTaxiways',
             quickPadType: 'ALPHA',
@@ -787,18 +893,18 @@
             tacFix: 'LEMIS',
             tacWxMiles: '15',
 
-            // Controladores detectados ao vivo na API (Iniciam todos NULL / OFFLINE!)
             onlineDepDel: null,
             onlineDepGnd: null,
             onlineDepAtc: null,
             onlineAppAtc: null,
-            onlineCtrAtc: null,
+            onlineDepCtr: null,
+            onlineArrCtr: null,
             onlineArrApp: null,
             onlineArrAtc: null,
             onlineArrGnd: null,
 
-            // Chave manual apenas se o piloto clicar em [Simular] no card para treinar offline
             manualSimAtc: {
+                depDel: false,
                 depGnd: false,
                 depTwr: false,
                 depApp: false,
@@ -822,145 +928,320 @@
         ];
 
         // ============================================================================
-        // 3. VERIFICAÇÃO REAL DE ATC ATIVO POR FASE (AUTO REDE + TOP-DOWN)
+        // 3. SINTETIZADOR DE ÁUDIO SELCAL / ACARS (WEB AUDIO API - ZERO ARQUIVOS EXTERNOS)
         // ============================================================================
-        function isSlotActive(slotKey) {
+        let sharedAudioCtx = null;
+
+        function obterAudioContext() {
+            if (!sharedAudioCtx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) sharedAudioCtx = new AudioCtx();
+            }
+            if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+                sharedAudioCtx.resume();
+            }
+            return sharedAudioCtx;
+        }
+
+        // Emite um timbre duplo estilo Airbus SELCAL / ACARS quando entra controlador online
+        function tocarSomAlertaAtc() {
+            if (!state.audioAlertEnabled) return;
+            try {
+                const ctx = obterAudioContext();
+                if (!ctx) return;
+
+                const now = ctx.currentTime;
+                // Sequência de 3 notas harmônicas de cabine (C5 -> E5 -> G5)
+                const tones = [
+                    { freq: 523.25, start: 0.0, dur: 0.18 },
+                    { freq: 659.25, start: 0.20, dur: 0.18 },
+                    { freq: 783.99, start: 0.40, dur: 0.45 }
+                ];
+
+                tones.forEach(t => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(t.freq, now + t.start);
+
+                    gain.gain.setValueAtTime(0.001, now + t.start);
+                    gain.gain.exponentialRampToValueAtTime(0.28, now + t.start + 0.03);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + t.start + t.dur);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + t.start);
+                    osc.stop(now + t.start + t.dur + 0.02);
+                });
+            } catch (e) {
+                console.warn('Áudio bloqueado pelo navegador até interação:', e);
+            }
+        }
+
+        function testarAlertaSonoroAtc() {
+            state.audioAlertEnabled = true;
+            atualizarBotaoAudio();
+            tocarSomAlertaAtc();
+            dispararBannerNovoAtc([{ callsign: `${state.depIcao}_TWR`, freq: '118.700', role: `Torre ${state.depRadioName}` }]);
+            mostrarToast('🔔 Alerta sonoro SELCAL testado com sucesso!', 'success');
+        }
+
+        function toggleAudioAlert() {
+            state.audioAlertEnabled = !state.audioAlertEnabled;
+            atualizarBotaoAudio();
+            if (state.audioAlertEnabled) {
+                tocarSomAlertaAtc();
+                mostrarToast('🔔 Alerta sonoro de novo controlador ATIVADO!', 'success');
+            } else {
+                mostrarToast('🔕 Alerta sonoro silenciado.', 'info');
+            }
+        }
+
+        function atualizarBotaoAudio() {
+            const btn = document.getElementById('btn-sound-alert');
+            const lbl = document.getElementById('lbl-sound-status');
+            const icon = document.getElementById('icon-sound-alert');
+            if (state.audioAlertEnabled) {
+                btn.className = 'text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1';
+                if (lbl) lbl.innerText = 'Som ON';
+                if (icon) icon.setAttribute('data-lucide', 'volume-2');
+            } else {
+                btn.className = 'text-slate-500 hover:text-slate-300 font-bold flex items-center gap-1';
+                if (lbl) lbl.innerText = 'Mudo';
+                if (icon) icon.setAttribute('data-lucide', 'volume-x');
+            }
+            lucide.createIcons();
+        }
+
+        function dispararBannerNovoAtc(novosList) {
+            if (!novosList || novosList.length === 0) return;
+            const banner = document.getElementById('new-atc-alert-banner');
+            const textEl = document.getElementById('new-atc-alert-text');
+            const resumo = novosList.map(n => `${n.callsign} (${n.freq})`).join(' • ');
+            textEl.innerText = `Conectou na sua rota: ${resumo} — Fraseologia atualizada!`;
+            banner.classList.remove('hidden');
+        }
+
+        function fecharBannerNovoAtc() {
+            document.getElementById('new-atc-alert-banner').classList.add('hidden');
+        }
+
+        // ============================================================================
+        // 4. SELETOR DE MODO DE DISPOSITIVO: 🖥️ PC (WIDESCREEN) vs 📱 CELULAR
+        // ============================================================================
+        function setDeviceMode(mode, save = true) {
+            state.deviceMode = mode;
+            if (save) localStorage.setItem('smart_atc_device_mode', mode);
+
+            const shell = document.getElementById('app-shell');
+            const btnPc = document.getElementById('btn-device-pc');
+            const btnMob = document.getElementById('btn-device-mobile');
+            const desktopSidebar = document.getElementById('desktop-sidebar');
+            const mobilePhaseBar = document.getElementById('mobile-phase-bar');
+            const briefingPanel = document.getElementById('briefing-panel');
+            const atcPanel = document.getElementById('atc-available-panel');
+            const briefingGrid = document.getElementById('briefing-grid');
+            const atcCardsGrid = document.getElementById('atc-cards-container');
+            const brandTitle = document.getElementById('brand-title');
+            const gaLabel = document.getElementById('lbl-ga-btn');
+
+            if (mode === 'MOBILE') {
+                shell.className = 'mode-mobile flex flex-col bg-slate-950 overflow-hidden relative';
+                btnMob.className = 'px-2 py-0.5 rounded-md font-bold flex items-center gap-1 transition bg-blue-600 text-white';
+                btnPc.className = 'px-2 py-0.5 rounded-md font-bold flex items-center gap-1 transition text-slate-400 hover:text-white';
+
+                // Otimizações exclusivas para Celular:
+                desktopSidebar.classList.add('hidden');
+                mobilePhaseBar.classList.remove('hidden');
+                // Recolhe painéis grandes para dar 85% da tela para leitura das falas
+                briefingPanel.classList.add('hidden');
+                atcPanel.classList.add('hidden');
+                briefingGrid.className = 'w-full grid grid-cols-1 gap-2';
+                atcCardsGrid.className = 'grid grid-cols-2 gap-1.5';
+                brandTitle.innerText = 'ATC PRO';
+                gaLabel.innerText = 'GA';
+                if (state.selectedPhase === 'ALL') {
+                    state.selectedPhase = 'autorizacao';
+                }
+            } else {
+                shell.className = 'mode-pc flex flex-col bg-slate-950 overflow-hidden relative';
+                btnPc.className = 'px-2 py-0.5 rounded-md font-bold flex items-center gap-1 transition bg-blue-600 text-white';
+                btnMob.className = 'px-2 py-0.5 rounded-md font-bold flex items-center gap-1 transition text-slate-400 hover:text-white';
+
+                // Otimizações para Monitor de PC Widescreen:
+                desktopSidebar.classList.remove('hidden');
+                mobilePhaseBar.classList.add('hidden');
+                briefingPanel.classList.remove('hidden');
+                atcPanel.classList.remove('hidden');
+                briefingGrid.className = 'w-full grid grid-cols-1 lg:grid-cols-2 gap-2.5';
+                atcCardsGrid.className = 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5';
+                brandTitle.innerText = 'SMART ATC PRO';
+                gaLabel.innerText = 'ARREMETIDA';
+            }
+
+            renderizarMenuFases();
+            renderizarDialogos();
+        }
+
+        // ============================================================================
+        // 5. MOTOR DE RESOLUÇÃO TOP-DOWN ("O DE CIMA ABSORVE O DE BAIXO")
+        // ============================================================================
+        function isDirectPositionOnline(posKey) {
             if (state.atcMode === 'UNICOM') return false;
             if (state.atcMode === 'ONLINE') return true;
-            // No modo AUTO (Padrão): Só retorna true se estiver ONLINE na API (ou se o piloto clicou em Simular naquele card)
-            const apiOnlineMap = {
+            const apiMap = {
                 depDel: !!state.onlineDepDel,
-                depGnd: !!state.onlineDepGnd || !!state.onlineDepDel,
+                depGnd: !!state.onlineDepGnd,
                 depTwr: !!state.onlineDepAtc,
                 depApp: !!state.onlineAppAtc,
-                ctr: !!state.onlineCtrAtc,
+                ctr: !!state.onlineDepCtr || !!state.onlineArrCtr,
                 arrApp: !!state.onlineArrApp,
                 arrTwr: !!state.onlineArrAtc,
                 arrGnd: !!state.onlineArrGnd
             };
-            return apiOnlineMap[slotKey] || !!state.manualSimAtc[slotKey];
+            return apiMap[posKey] || !!state.manualSimAtc[posKey];
         }
 
-        // Verifica se uma Fase específica tem controlador online (incluindo cobertura Top-Down)
-        function faseTemAtcOnline(phaseId) {
-            if (state.atcMode === 'UNICOM') return false;
-            if (state.atcMode === 'ONLINE') return true;
-
-            switch (phaseId) {
-                case 'autorizacao':
-                case 'push_taxi':
-                    return isSlotActive('depGnd') || isSlotActive('depTwr') || isSlotActive('depApp') || isSlotActive('ctr');
-                case 'decolagem':
-                    return isSlotActive('depTwr') || isSlotActive('depApp') || isSlotActive('ctr');
-                case 'subida':
-                    return isSlotActive('depApp') || isSlotActive('ctr');
-                case 'cruzeiro':
-                    return isSlotActive('ctr');
-                case 'aproximacao':
-                    return isSlotActive('arrApp') || isSlotActive('ctr') || isSlotActive('arrTwr');
-                case 'pousando':
-                case 'taxi_chegada':
-                    return isSlotActive('arrTwr') || isSlotActive('arrGnd') || isSlotActive('arrApp') || isSlotActive('ctr');
-                default:
-                    return false;
-            }
-        }
-
-        function obterOrgaoAtcParaFase(phaseType, lang = state.speechLang) {
+        function obterDadosControladorUnitario(posKey, lang = state.speechLang) {
             const depCity = state.depRadioName;
             const arrCity = state.arrRadioName;
+            const depTma = obterInfoTma(state.depIcao, depCity);
+            const arrTma = obterInfoTma(state.arrIcao, arrCity);
+            const depFir = obterInfoFir(state.depIcao);
+            const arrFir = obterInfoFir(state.arrIcao);
 
-            if (phaseType === 'CLEARANCE') {
-                if (state.onlineDepDel) {
-                    return { call: lang === 'EN' ? `${depCity} Delivery` : `Tráfego ${depCity}`, title: `Tráfego ${depCity} - ${state.onlineDepDel.callsign} ${state.onlineDepDel.freq}`, freq: state.onlineDepDel.freq };
+            switch (posKey) {
+                case 'depDel': {
+                    const cs = state.onlineDepDel?.callsign || `${state.depIcao}_DEL`;
+                    const freq = state.onlineDepDel?.freq || '121.000';
+                    const call = lang === 'EN' ? `${depCity} Delivery` : `Tráfego ${depCity}`;
+                    return { id: 'depDel', level: 1, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
                 }
-                if (isSlotActive('depGnd')) {
-                    const freq = state.onlineDepGnd?.freq || '121.900';
+                case 'depGnd': {
                     const cs = state.onlineDepGnd?.callsign || `${state.depIcao}_GND`;
-                    return { call: lang === 'EN' ? `${depCity} Ground` : `Solo ${depCity}`, title: `Solo ${depCity} - ${cs} ${freq}`, freq };
-                }
-                if (isSlotActive('depTwr')) {
-                    const freq = state.onlineDepAtc?.freq || '118.700';
-                    const cs = state.onlineDepAtc?.callsign || `${state.depIcao}_TWR`;
-                    return { call: lang === 'EN' ? `${depCity} Tower` : `Torre ${depCity}`, title: `Torre ${depCity} - ${cs} ${freq}`, freq };
-                }
-                if (isSlotActive('depApp')) {
-                    const freq = state.onlineAppAtc?.freq || '120.450';
-                    const cs = state.onlineAppAtc?.callsign || `${state.depIcao}_APP`;
-                    return { call: lang === 'EN' ? `${depCity} Control` : `Controle ${depCity}`, title: `Controle ${depCity} - ${cs} ${freq}`, freq };
-                }
-                const freq = state.onlineCtrAtc?.freq || '125.200';
-                const cs = state.onlineCtrAtc?.callsign || `${obterFirPorIcao(state.depIcao)}_CTR`;
-                return { call: lang === 'EN' ? `Center` : `Centro`, title: `Centro Radar - ${cs} ${freq}`, freq };
-            }
-
-            if (phaseType === 'DEP_GROUND') {
-                if (isSlotActive('depGnd')) {
                     const freq = state.onlineDepGnd?.freq || '121.900';
-                    const cs = state.onlineDepGnd?.callsign || `${state.depIcao}_GND`;
-                    return { call: lang === 'EN' ? `${depCity} Ground` : `Solo ${depCity}`, title: `Solo ${depCity} - ${cs} ${freq}`, freq, hasSeparateTower: isSlotActive('depTwr') };
+                    const call = lang === 'EN' ? `${depCity} Ground` : `Solo ${depCity}`;
+                    return { id: 'depGnd', level: 2, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
                 }
-                const twr = obterOrgaoAtcParaFase('DEP_TOWER', lang);
-                return { ...twr, hasSeparateTower: false };
-            }
-
-            if (phaseType === 'DEP_TOWER') {
-                if (isSlotActive('depTwr')) {
-                    const freq = state.onlineDepAtc?.freq || '118.700';
+                case 'depTwr': {
                     const cs = state.onlineDepAtc?.callsign || `${state.depIcao}_TWR`;
-                    return { call: lang === 'EN' ? `${depCity} Tower` : `Torre ${depCity}`, title: `Torre ${depCity} - ${cs} ${freq}`, freq };
+                    const freq = state.onlineDepAtc?.freq || '118.700';
+                    const call = lang === 'EN' ? `${depCity} Tower` : `Torre ${depCity}`;
+                    return { id: 'depTwr', level: 3, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
                 }
-                if (isSlotActive('depApp')) return obterOrgaoAtcParaFase('DEP_APP', lang);
-                return obterOrgaoAtcParaFase('CENTER', lang);
-            }
-
-            if (phaseType === 'DEP_APP') {
-                if (isSlotActive('depApp')) {
-                    const freq = state.onlineAppAtc?.freq || '120.450';
-                    const cs = state.onlineAppAtc?.callsign || `${state.depIcao}_APP`;
-                    return { call: lang === 'EN' ? `${depCity} Control` : `Controle ${depCity}`, title: `Controle ${depCity} - ${cs} ${freq}`, freq };
+                case 'depApp': {
+                    const cs = state.onlineAppAtc?.callsign || depTma.defaultCs;
+                    const freq = state.onlineAppAtc?.freq || depTma.defaultFreq;
+                    const call = lang === 'EN' ? depTma.nameEn : depTma.namePt;
+                    return { id: 'depApp', level: 4, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
                 }
-                return obterOrgaoAtcParaFase('CENTER', lang);
-            }
-
-            if (phaseType === 'CENTER') {
-                const freq = state.onlineCtrAtc?.freq || '125.200';
-                const cs = state.onlineCtrAtc?.callsign || `${obterFirPorIcao(state.depIcao)}_CTR`;
-                return { call: lang === 'EN' ? `Center` : `Centro`, title: `Centro Radar - ${cs} ${freq}`, freq };
-            }
-
-            if (phaseType === 'ARR_APP') {
-                if (isSlotActive('arrApp')) {
-                    const freq = state.onlineArrApp?.freq || '119.000';
-                    const cs = state.onlineArrApp?.callsign || `${state.arrIcao}_APP`;
-                    return { call: lang === 'EN' ? `${arrCity} Approach` : `Controle ${arrCity}`, title: `Controle ${arrCity} - ${cs} ${freq}`, freq };
+                case 'ctr': {
+                    const onlineCtr = state.onlineDepCtr || state.onlineArrCtr;
+                    const cs = onlineCtr?.callsign || `${depFir.code}_CTR`;
+                    const freq = onlineCtr?.freq || depFir.freq;
+                    const call = lang === 'EN' ? depFir.nameEn : depFir.namePt;
+                    return { id: 'ctr', level: 5, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
                 }
-                if (isSlotActive('ctr')) return obterOrgaoAtcParaFase('CENTER', lang);
-                return obterOrgaoAtcParaFase('ARR_TOWER', lang);
-            }
-
-            if (phaseType === 'ARR_TOWER') {
-                if (isSlotActive('arrTwr')) {
-                    const freq = state.onlineArrAtc?.freq || '118.100';
+                case 'arrCtr': {
+                    const onlineCtr = state.onlineArrCtr || state.onlineDepCtr;
+                    const cs = onlineCtr?.callsign || `${arrFir.code}_CTR`;
+                    const freq = onlineCtr?.freq || arrFir.freq;
+                    const call = lang === 'EN' ? arrFir.nameEn : arrFir.namePt;
+                    return { id: 'ctr', level: 5, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
+                }
+                case 'arrApp': {
+                    const cs = state.onlineArrApp?.callsign || arrTma.defaultCs;
+                    const freq = state.onlineArrApp?.freq || arrTma.defaultFreq;
+                    const call = lang === 'EN' ? arrTma.nameEn : arrTma.namePt;
+                    return { id: 'arrApp', level: 4, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
+                }
+                case 'arrTwr': {
                     const cs = state.onlineArrAtc?.callsign || `${state.arrIcao}_TWR`;
-                    return { call: lang === 'EN' ? `${arrCity} Tower` : `Torre ${arrCity}`, title: `Torre ${arrCity} - ${cs} ${freq}`, freq };
+                    const freq = state.onlineArrAtc?.freq || '118.100';
+                    const call = lang === 'EN' ? `${arrCity} Tower` : `Torre ${arrCity}`;
+                    return { id: 'arrTwr', level: 3, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
                 }
-                if (isSlotActive('arrApp')) return obterOrgaoAtcParaFase('ARR_APP', lang);
-                return obterOrgaoAtcParaFase('CENTER', lang);
+                case 'arrGnd': {
+                    const cs = state.onlineArrGnd?.callsign || `${state.arrIcao}_GND`;
+                    const freq = state.onlineArrGnd?.freq || '121.700';
+                    const call = lang === 'EN' ? `${arrCity} Ground` : `Solo ${arrCity}`;
+                    return { id: 'arrGnd', level: 2, call, callsign: cs, freq, title: `${call} - ${cs} ${freq}` };
+                }
+            }
+        }
+
+        function resolverTopDownParaPosicao(targetRole, lang = state.speechLang) {
+            if (state.atcMode === 'UNICOM') return null;
+
+            const chains = {
+                'DEP_DEL': ['depDel', 'depGnd', 'depTwr', 'depApp', 'ctr'],
+                'DEP_GND': ['depGnd', 'depTwr', 'depApp', 'ctr'],
+                'DEP_TWR': ['depTwr', 'depApp', 'ctr'],
+                'DEP_APP': ['depApp', 'ctr'],
+                'ENROUTE_CTR': ['ctr'],
+                'ARR_APP': ['arrApp', 'ctr'],
+                'ARR_TWR': ['arrTwr', 'arrApp', 'ctr'],
+                'ARR_GND': ['arrGnd', 'arrTwr', 'arrApp', 'ctr']
+            };
+
+            const chain = chains[targetRole] || [];
+            for (let i = 0; i < chain.length; i++) {
+                const candidateKey = chain[i];
+                if (isDirectPositionOnline(candidateKey)) {
+                    const unitKey = (candidateKey === 'ctr' && targetRole.startsWith('ARR_')) ? 'arrCtr' : candidateKey;
+                    const info = obterDadosControladorUnitario(unitKey, lang);
+                    return {
+                        ...info,
+                        isTopDown: i > 0,
+                        absorbedRole: targetRole
+                    };
+                }
+            }
+            return null;
+        }
+
+        function obterAtcEfetivoDaFase(phaseId, lang = state.speechLang) {
+            const phaseToRole = {
+                'autorizacao': 'DEP_DEL',
+                'push_taxi': 'DEP_GND',
+                'decolagem': 'DEP_TWR',
+                'subida': 'DEP_APP',
+                'cruzeiro': 'ENROUTE_CTR',
+                'aproximacao': 'ARR_APP',
+                'pousando': 'ARR_TWR',
+                'taxi_chegada': 'ARR_GND'
+            };
+            return resolverTopDownParaPosicao(phaseToRole[phaseId], lang);
+        }
+
+        function aplicarCenarioTopDown(cenario) {
+            state.atcMode = 'AUTO';
+            Object.keys(state.manualSimAtc).forEach(k => state.manualSimAtc[k] = false);
+
+            if (cenario === 'ONLY_CTR') {
+                state.manualSimAtc.ctr = true;
+                tocarSomAlertaAtc();
+                dispararBannerNovoAtc([{ callsign: `${obterInfoFir(state.depIcao).code}_CTR`, freq: obterInfoFir(state.depIcao).freq }]);
+            } else if (cenario === 'ONLY_APP') {
+                state.manualSimAtc.depApp = true;
+                state.manualSimAtc.arrApp = true;
+                tocarSomAlertaAtc();
+                dispararBannerNovoAtc([{ callsign: obterInfoTma(state.depIcao, state.depRadioName).defaultCs, freq: obterInfoTma(state.depIcao, state.depRadioName).defaultFreq }]);
+            } else if (cenario === 'ONLY_TWR') {
+                state.manualSimAtc.depTwr = true;
+                state.manualSimAtc.arrTwr = true;
+                tocarSomAlertaAtc();
+                dispararBannerNovoAtc([{ callsign: `${state.depIcao}_TWR`, freq: '118.700' }]);
+            } else {
+                fecharBannerNovoAtc();
+                mostrarToast('Modo Tempo Real API ativado.', 'success');
             }
 
-            if (phaseType === 'ARR_GROUND') {
-                if (isSlotActive('arrGnd')) {
-                    const freq = state.onlineArrGnd?.freq || '121.700';
-                    const cs = state.onlineArrGnd?.callsign || `${state.arrIcao}_GND`;
-                    return { call: lang === 'EN' ? `${arrCity} Ground` : `Solo ${arrCity}`, title: `Solo ${arrCity} - ${cs} ${freq}`, freq };
-                }
-                return obterOrgaoAtcParaFase('ARR_TOWER', lang);
-            }
+            setModoATC('AUTO');
         }
 
         // ============================================================================
-        // 4. FORMATAÇÃO FONÉTICA E UTILITÁRIOS
+        // 6. FORMATAÇÃO FONÉTICA E UTILITÁRIOS
         // ============================================================================
         function obterCallsignFalado(rawCallsign, lang = state.speechLang) {
             const clean = (rawCallsign || '').trim().toUpperCase();
@@ -1003,19 +1284,37 @@
         }
 
         // ============================================================================
-        // 5. INICIALIZAÇÃO E MINI QUICK-PAD CONTEXTUAL
+        // 7. INICIALIZAÇÃO, LOOP AUTÔNOMO DO RADAR E MINI QUICK-PAD
         // ============================================================================
         function init() {
             lucide.createIcons();
             iniciarRelogio();
             construirBotoesQuickPad();
             verificarSimBriefSalvo();
+
+            // Define modo PC ou Celular salvo ou detectado pelo tamanho do monitor
+            const savedDevice = localStorage.getItem('smart_atc_device_mode');
+            const initialDevice = savedDevice || (window.innerWidth < 768 ? 'MOBILE' : 'PC');
+            setDeviceMode(initialDevice, false);
+
             sincronizarInputsComState();
-            renderizarMenuFases();
             renderizarPainelAtc();
             renderizarFrasesTaticas();
             renderizarDialogos();
-            verificarRedesOnline();
+            verificarRedesOnline(false);
+            iniciarRadarAutonomo();
+        }
+
+        function iniciarRadarAutonomo() {
+            setInterval(() => {
+                state.autoSyncCountdown--;
+                if (state.autoSyncCountdown <= 0) {
+                    state.autoSyncCountdown = state.autoSyncIntervalSec;
+                    verificarRedesOnline(true); // Busca autônoma silenciosa com detecção de novos ATCs
+                }
+                const el = document.getElementById('auto-sync-countdown');
+                if (el) el.innerText = `${state.autoSyncCountdown}s`;
+            }, 1000);
         }
 
         function iniciarRelogio() {
@@ -1127,7 +1426,7 @@
         }
 
         // ============================================================================
-        // 6. INTEGRAÇÃO SIMBRIEF E BUSCA DE ATC ONLINE NAS APIs (IVAO & VATSIM)
+        // 8. SIMBRIEF E RADAR AUTÔNOMO COM NOTIFICAÇÃO SONORA DE NOVO CONTROLADOR
         // ============================================================================
         function verificarSimBriefSalvo() {
             const savedId = localStorage.getItem('smart_atc_simbrief_user');
@@ -1151,10 +1450,7 @@
 
         function salvarECarregarSimBrief() {
             const val = document.getElementById('simbrief-user-input').value.trim();
-            if (!val) {
-                mostrarToast('Informe seu usuário ou ID do SimBrief!', 'error');
-                return;
-            }
+            if (!val) return mostrarToast('Informe seu usuário ou ID do SimBrief!', 'error');
             localStorage.setItem('smart_atc_simbrief_user', val);
             verificarSimBriefSalvo();
             buscarDadosSimBrief(val);
@@ -1205,11 +1501,13 @@
             state.cruiseFl = d.cruiseFl;
             state.appType = d.appType;
 
+            state.knownOnlineCallsigns.clear();
+            state.firstApiSyncDone = false;
             limparCamposAtc(false);
             resetarProgressoFalas(false);
             sincronizarInputsComState();
-            verificarRedesOnline();
-            mostrarToast(`Rota: ${obterCallsignFalado(state.callsign)} (${state.depIcao} ➔ ${state.arrIcao})`, 'success');
+            verificarRedesOnline(false);
+            mostrarToast(`Rota Demo: ${obterCallsignFalado(state.callsign)} (${state.depIcao} ➔ ${state.arrIcao})`, 'success');
         }
 
         async function buscarDadosSimBrief(identificador) {
@@ -1261,11 +1559,13 @@
                 extrairDadosMetar(data.weather?.orig_metar || '', 'DEP');
                 extrairDadosMetar(data.weather?.dest_metar || '', 'ARR');
 
+                state.knownOnlineCallsigns.clear();
+                state.firstApiSyncDone = false;
                 limparCamposAtc(false);
                 resetarProgressoFalas(false);
                 sincronizarInputsComState();
-                await verificarRedesOnline();
-                mostrarToast(`SimBrief carregado: ${obterCallsignFalado(state.callsign)}`, 'success');
+                await verificarRedesOnline(false);
+                mostrarToast(`SimBrief: ${obterCallsignFalado(state.callsign)}`, 'success');
             } catch (err) {
                 mostrarToast('Erro ao buscar SimBrief. Verifique seu ID.', 'error');
             } finally {
@@ -1289,34 +1589,29 @@
             }
         }
 
-        // Busca real na API da IVAO e VATSIM (Reseta todos os online para null antes de buscar!)
-        async function verificarRedesOnline() {
+        // Busca na API da IVAO / VATSIM e compara com a leitura anterior para emitir alerta sonoro
+        async function verificarRedesOnline(isAutoCheck = false) {
+            state.autoSyncCountdown = state.autoSyncIntervalSec;
             state.onlineDepDel = null;
             state.onlineDepGnd = null;
             state.onlineDepAtc = null;
             state.onlineAppAtc = null;
-            state.onlineCtrAtc = null;
+            state.onlineDepCtr = null;
+            state.onlineArrCtr = null;
             state.onlineArrApp = null;
             state.onlineArrAtc = null;
             state.onlineArrGnd = null;
 
             document.getElementById('lbl-active-network').innerText = state.network;
-            const statusMsg = document.getElementById('radar-status-msg');
-            if (statusMsg) statusMsg.innerText = `Consultando API da ${state.network}...`;
-
             const iconRefresh = document.getElementById('icon-refresh-atc');
             if (iconRefresh) iconRefresh.classList.add('animate-spin');
-
-            let totalNaRede = 0;
 
             try {
                 if (state.network === 'VATSIM') {
                     const res = await fetch('https://data.vatsim.net/v3/vatsim-data.json');
                     if (res.ok) {
                         const data = await res.json();
-                        const controllers = data.controllers || [];
-                        totalNaRede = controllers.length;
-                        buscarControladoresNaLista(controllers);
+                        buscarControladoresNaLista(data.controllers || []);
                     }
                 } else {
                     let atcs = [];
@@ -1335,7 +1630,6 @@
                             atcs = d.clients?.atcs || [];
                         }
                     }
-                    totalNaRede = atcs.length;
                     buscarControladoresNaLista(atcs);
                 }
             } catch (err) {
@@ -1344,16 +1638,31 @@
                 if (iconRefresh) iconRefresh.classList.remove('animate-spin');
             }
 
-            const encontradosRota = [
-                state.onlineDepGnd, state.onlineDepAtc, state.onlineAppAtc,
-                state.onlineCtrAtc, state.onlineArrApp, state.onlineArrAtc, state.onlineArrGnd
-            ].filter(Boolean).length;
+            // Verifica se algum controlador NOVO entrou online na rota!
+            const currentControllers = [
+                state.onlineDepDel, state.onlineDepGnd, state.onlineDepAtc,
+                state.onlineAppAtc, state.onlineDepCtr, state.onlineArrCtr,
+                state.onlineArrApp, state.onlineArrAtc, state.onlineArrGnd
+            ].filter(Boolean);
 
-            if (statusMsg) {
-                statusMsg.innerText = encontradosRota > 0
-                    ? `✅ ${encontradosRota} controlador(es) online na sua rota (${totalNaRede} na rede)`
-                    : `📻 Nenhum ATC online em ${state.depIcao}/${state.arrIcao} (${totalNaRede} ativos na ${state.network}) ➔ Usando UNICOM 122.800`;
+            const novosConectados = [];
+            const currentCallsignSet = new Set();
+
+            currentControllers.forEach(c => {
+                currentCallsignSet.add(c.callsign);
+                if (!state.knownOnlineCallsigns.has(c.callsign)) {
+                    novosConectados.push(c);
+                }
+            });
+
+            state.knownOnlineCallsigns = currentCallsignSet;
+
+            // Se encontrou novos controladores na rota, emite o som SELCAL e mostra o banner!
+            if (novosConectados.length > 0) {
+                tocarSomAlertaAtc();
+                dispararBannerNovoAtc(novosConectados);
             }
+            state.firstApiSyncDone = true;
 
             renderizarPainelAtc();
             renderizarDialogos();
@@ -1369,24 +1678,34 @@
 
             const depPrefix = state.depIcao.toUpperCase();
             const arrPrefix = state.arrIcao.toUpperCase();
-            const firDep = obterFirPorIcao(depPrefix);
-            const firArr = obterFirPorIcao(arrPrefix);
+            const depTma = obterInfoTma(depPrefix, state.depRadioName);
+            const arrTma = obterInfoTma(arrPrefix, state.arrRadioName);
+            const firDep = obterInfoFir(depPrefix).code;
+            const firArr = obterInfoFir(arrPrefix).code;
 
             const validos = lista.map(normalizar).filter(c => c.callsign && !c.callsign.includes('ATIS') && !c.callsign.includes('OBS'));
 
             state.onlineDepDel = validos.find(c => c.callsign.startsWith(depPrefix) && c.callsign.endsWith('_DEL')) || null;
             state.onlineDepGnd = validos.find(c => c.callsign.startsWith(depPrefix) && c.callsign.endsWith('_GND')) || null;
             state.onlineDepAtc = validos.find(c => c.callsign.startsWith(depPrefix) && c.callsign.endsWith('_TWR')) || null;
-            state.onlineAppAtc = validos.find(c => c.callsign.startsWith(depPrefix) && c.callsign.endsWith('_APP')) || null;
-            state.onlineCtrAtc = validos.find(c => c.callsign.endsWith('_CTR') && (c.callsign.startsWith(firDep) || c.callsign.startsWith(firArr) || c.callsign.startsWith(depPrefix.substring(0,2)))) || null;
-            state.onlineArrApp = validos.find(c => c.callsign.startsWith(arrPrefix) && c.callsign.endsWith('_APP')) || null;
+            state.onlineAppAtc = validos.find(c => c.callsign.endsWith('_APP') && depTma.prefixes.some(p => c.callsign.startsWith(p))) || null;
+            state.onlineDepCtr = validos.find(c => c.callsign.endsWith('_CTR') && c.callsign.startsWith(firDep)) || null;
+
+            state.onlineArrCtr = validos.find(c => c.callsign.endsWith('_CTR') && c.callsign.startsWith(firArr)) || null;
+            state.onlineArrApp = validos.find(c => c.callsign.endsWith('_APP') && arrTma.prefixes.some(p => c.callsign.startsWith(p))) || null;
             state.onlineArrAtc = validos.find(c => c.callsign.startsWith(arrPrefix) && c.callsign.endsWith('_TWR')) || null;
             state.onlineArrGnd = validos.find(c => c.callsign.startsWith(arrPrefix) && c.callsign.endsWith('_GND')) || null;
         }
 
         function alternarSimulacaoManualAtc(event, simKey) {
             event.stopPropagation();
-            state.manualSimAtc[simKey] = !state.manualSimAtc[simKey];
+            const ligando = !state.manualSimAtc[simKey];
+            state.manualSimAtc[simKey] = ligando;
+            if (ligando) {
+                tocarSomAlertaAtc();
+                const unit = obterDadosControladorUnitario(simKey);
+                dispararBannerNovoAtc([{ callsign: unit.callsign, freq: unit.freq }]);
+            }
             renderizarPainelAtc();
             renderizarDialogos();
         }
@@ -1394,56 +1713,82 @@
         function renderizarPainelAtc() {
             const container = document.getElementById('atc-cards-container');
             const badgeCount = document.getElementById('online-atc-count-badge');
+            const statusMsg = document.getElementById('radar-status-msg');
             if (!container) return;
 
-            const slots = [
-                { simKey: 'depGnd', role: 'SOLO SAÍDA', callsign: state.onlineDepGnd?.callsign || `${state.depIcao}_GND`, freq: state.onlineDepGnd?.freq || '121.900', apiOnline: !!state.onlineDepGnd || !!state.onlineDepDel, phaseJump: 'autorizacao' },
-                { simKey: 'depTwr', role: 'TORRE SAÍDA', callsign: state.onlineDepAtc?.callsign || `${state.depIcao}_TWR`, freq: state.onlineDepAtc?.freq || '118.700', apiOnline: !!state.onlineDepAtc, phaseJump: 'decolagem' },
-                { simKey: 'depApp', role: 'APP SAÍDA', callsign: state.onlineAppAtc?.callsign || `${state.depIcao}_APP`, freq: state.onlineAppAtc?.freq || '120.450', apiOnline: !!state.onlineAppAtc, phaseJump: 'subida' },
-                { simKey: 'ctr', role: 'CENTRO ROTA', callsign: state.onlineCtrAtc?.callsign || `${obterFirPorIcao(state.depIcao)}_CTR`, freq: state.onlineCtrAtc?.freq || '125.200', apiOnline: !!state.onlineCtrAtc, phaseJump: 'cruzeiro' },
-                { simKey: 'arrApp', role: 'APP CHEGADA', callsign: state.onlineArrApp?.callsign || `${state.arrIcao}_APP`, freq: state.onlineArrApp?.freq || '119.000', apiOnline: !!state.onlineArrApp, phaseJump: 'aproximacao' },
-                { simKey: 'arrTwr', role: 'TORRE CHEGADA', callsign: state.onlineArrAtc?.callsign || `${state.arrIcao}_TWR`, freq: state.onlineArrAtc?.freq || '118.100', apiOnline: !!state.onlineArrAtc, phaseJump: 'pousando' },
-                { simKey: 'arrGnd', role: 'SOLO CHEGADA', callsign: state.onlineArrGnd?.callsign || `${state.arrIcao}_GND`, freq: state.onlineArrGnd?.freq || '121.700', apiOnline: !!state.onlineArrGnd, phaseJump: 'taxi_chegada' }
+            const roles = [
+                { roleKey: 'DEP_DEL', simKey: 'depDel', label: '1. DEL SAÍDA', phaseJump: 'autorizacao' },
+                { roleKey: 'DEP_GND', simKey: 'depGnd', label: '2. SOLO SAÍDA', phaseJump: 'push_taxi' },
+                { roleKey: 'DEP_TWR', simKey: 'depTwr', label: '3. TORRE SAÍDA', phaseJump: 'decolagem' },
+                { roleKey: 'DEP_APP', simKey: 'depApp', label: '4. APP SAÍDA', phaseJump: 'subida' },
+                { roleKey: 'ENROUTE_CTR', simKey: 'ctr', label: '5. CENTRO ROTA', phaseJump: 'cruzeiro' },
+                { roleKey: 'ARR_APP', simKey: 'arrApp', label: '6. APP CHEGADA', phaseJump: 'aproximacao' },
+                { roleKey: 'ARR_TWR', simKey: 'arrTwr', label: '7. TORRE CHEG', phaseJump: 'pousando' },
+                { roleKey: 'ARR_GND', simKey: 'arrGnd', label: '8. SOLO CHEG', phaseJump: 'taxi_chegada' }
             ];
 
-            const activeCount = slots.filter(s => isSlotActive(s.simKey)).length;
-            badgeCount.innerText = activeCount > 0 ? `${activeCount} ON` : `UNICOM`;
-            badgeCount.className = activeCount > 0
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 rounded text-[10px] font-mono'
-                : 'bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 rounded text-[10px] font-mono';
+            let coveredCount = 0;
+            let directCount = 0;
 
-            container.innerHTML = slots.map(s => {
-                const isSim = !!state.manualSimAtc[s.simKey];
-                const active = isSlotActive(s.simKey);
+            container.innerHTML = roles.map(r => {
+                const isDirect = isDirectPositionOnline(r.simKey);
+                const resolved = resolverTopDownParaPosicao(r.roleKey);
+                const defaultUnit = obterDadosControladorUnitario(r.simKey);
+
+                if (isDirect) directCount++;
+                if (resolved) coveredCount++;
 
                 let statusBadge = '';
-                if (s.apiOnline) {
-                    statusBadge = `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>ONLINE</span>`;
+                let cardBorder = '';
+                let subText = '';
+                let mainCs = defaultUnit.callsign;
+                let mainFreq = defaultUnit.freq;
+
+                if (isDirect) {
+                    statusBadge = `<button onclick="alternarSimulacaoManualAtc(event, '${r.simKey}')" class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>DIRETO</button>`;
+                    cardBorder = 'border-emerald-500/60 bg-emerald-950/25';
+                    subText = `<span class="text-emerald-300 font-semibold">${defaultUnit.call}</span>`;
+                } else if (resolved && resolved.isTopDown) {
+                    statusBadge = `<button onclick="alternarSimulacaoManualAtc(event, '${r.simKey}')" class="bg-purple-500/25 text-purple-200 border border-purple-400/50 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold" title="Absorvido via Top-Down por ${resolved.callsign}">⤵ TOP-DOWN</button>`;
+                    cardBorder = 'border-purple-500/50 bg-purple-950/20';
+                    mainCs = resolved.callsign;
+                    mainFreq = resolved.freq;
+                    subText = `<span class="text-purple-300 font-semibold">Absorvido: ${resolved.call}</span>`;
                 } else {
-                    statusBadge = `<button onclick="alternarSimulacaoManualAtc(event, '${s.simKey}')" class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition ${isSim ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}" title="Clique para simular este ATC mesmo estando offline na rede">${isSim ? 'SIMULADO' : 'OFF (Simular)'}</button>`;
+                    statusBadge = `<button onclick="alternarSimulacaoManualAtc(event, '${r.simKey}')" class="bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold" title="Clique para simular este controlador online">OFF (Simular)</button>`;
+                    cardBorder = 'border-slate-800 bg-slate-950/60 opacity-65';
+                    subText = `<span class="text-blue-400">📻 UNICOM 122.800</span>`;
                 }
 
-                const cardBorder = active
-                    ? 'border-emerald-500/50 bg-emerald-950/20'
-                    : 'border-slate-800 bg-slate-950/60 opacity-65';
-
                 return `
-                    <div onclick="selecionarFase('${s.phaseJump}')" class="p-2 rounded-lg border ${cardBorder} cursor-pointer transition flex flex-col justify-between gap-0.5">
+                    <div onclick="selecionarFase('${r.phaseJump}')" class="p-2 rounded-lg border ${cardBorder} cursor-pointer transition flex flex-col justify-between gap-0.5">
                         <div class="flex items-center justify-between gap-1">
-                            <span class="text-[9px] font-bold uppercase text-slate-400 truncate">${s.role}</span>
+                            <span class="text-[9px] font-extrabold uppercase text-slate-300 truncate">${r.label}</span>
                             ${statusBadge}
                         </div>
                         <div class="flex items-baseline justify-between mt-0.5">
-                            <span class="font-mono font-bold text-xs text-white truncate">${s.callsign}</span>
-                            <span class="font-mono font-bold text-[10px] ${active ? 'text-emerald-400' : 'text-slate-500'}">${s.freq}</span>
+                            <span class="font-mono font-bold text-[11px] text-white truncate">${mainCs}</span>
+                            <span class="font-mono font-bold text-[10px] ${resolved ? 'text-emerald-400' : 'text-slate-500'}">${mainFreq}</span>
                         </div>
+                        <div class="text-[9px] truncate">${subText}</div>
                     </div>
                 `;
             }).join('');
+
+            badgeCount.innerText = coveredCount > 0 ? `${coveredCount}/8 ON` : `UNICOM`;
+            badgeCount.className = coveredCount > 0
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 rounded text-[10px] font-mono'
+                : 'bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 rounded text-[10px] font-mono';
+
+            if (statusMsg) {
+                statusMsg.innerText = coveredCount > 0
+                    ? `✅ ${directCount} ATC(s) diretos cobrindo ${coveredCount} de 8 etapas via Regra Top-Down`
+                    : `📻 Sem ATC online em ${state.depIcao} ➔ ${state.arrIcao} • Radar buscando sozinho a cada 45s`;
+            }
         }
 
         // ============================================================================
-        // 7. MOTOR DE 5 ESTILOS REAIS (COM TRANSIÇÃO INTELIGENTE TORRE <-> UNICOM)
+        // 9. MOTOR DE DIÁLOGOS COM SUPRESSÃO DE HANDOFF TOP-DOWN & 5 ESTILOS REAIS
         // ============================================================================
         function construirDialogosPorFase(phaseId) {
             const lang = state.speechLang;
@@ -1452,21 +1797,21 @@
             const spokenCs = obterCallsignFalado(state.callsign, lang);
             const cs = `<span class="filled-badge">${spokenCs}</span>`;
 
-            // VERIFICA SE HÁ ATC ONLINE PARA ESTA FASE ESPECÍFICA!
-            if (!faseTemAtcOnline(phaseId)) {
-                return construirDialogosUnicomInterativo(phaseId, lang, v, cs, spokenCs);
+            const clrAtc = resolverTopDownParaPosicao('DEP_DEL', lang);
+            const gndDepAtc = resolverTopDownParaPosicao('DEP_GND', lang);
+            const twrDepAtc = resolverTopDownParaPosicao('DEP_TWR', lang);
+            const appDepAtc = resolverTopDownParaPosicao('DEP_APP', lang);
+            const ctrAtc = resolverTopDownParaPosicao('ENROUTE_CTR', lang);
+            const appArrAtc = resolverTopDownParaPosicao('ARR_APP', lang);
+            const twrArrAtc = resolverTopDownParaPosicao('ARR_TWR', lang);
+            const gndArrAtc = resolverTopDownParaPosicao('ARR_GND', lang);
+
+            const currentAtc = obterAtcEfetivoDaFase(phaseId, lang);
+
+            if (!currentAtc) {
+                return construirDialogosUnicomInterativo(phaseId, lang, v, cs);
             }
 
-            const clrAtc = obterOrgaoAtcParaFase('CLEARANCE', lang);
-            const gndDepAtc = obterOrgaoAtcParaFase('DEP_GROUND', lang);
-            const twrDepAtc = obterOrgaoAtcParaFase('DEP_TOWER', lang);
-            const appDepAtc = obterOrgaoAtcParaFase('DEP_APP', lang);
-            const ctrAtc = obterOrgaoAtcParaFase('CENTER', lang);
-            const appArrAtc = obterOrgaoAtcParaFase('ARR_APP', lang);
-            const twrArrAtc = obterOrgaoAtcParaFase('ARR_TOWER', lang);
-            const gndArrAtc = obterOrgaoAtcParaFase('ARR_GROUND', lang);
-
-            // 1. AUTORIZAÇÃO DO PLANO
             if (phaseId === 'autorizacao') {
                 const pos = fmt(state.depGate, 'depGate', true, false, false, 'ALPHA');
                 const rules = fmt(state.flightRules, 'inp-rules');
@@ -1479,14 +1824,15 @@
                 const sqwk = fmt(state.squawk, 'squawk', true, false, true, 'NUM');
 
                 const inputSquawkHtml = `<input type="text" inputmode="none" data-atc-field="squawk" value="${state.squawk}" maxlength="4" placeholder="____" onfocus="abrirQuickPadPara('squawk', 'Transponder', 'NUM')" oninput="atualizarInputTorre('squawk', this.value)" class="inline-atc-input w-16 text-center">`;
+                const mudaParaSolo = gndDepAtc && gndDepAtc.callsign !== clrAtc.callsign;
 
                 if (lang === 'EN') {
                     return [
                         { role: 'PILOT', text: `${clrAtc.call}, ${saudacao}, ${cs} on stand ${pos} with information ${atis}, requesting ${rules} clearance to ${dest}, flight level ${fl}.` },
                         { role: 'ATC', station: clrAtc.title, text: `${spokenCs} ${saudacao}, cleared ${state.flightRules} to ${state.arrName} at flight level ${state.cruiseFl}, departure runway ${state.depRwy}, ${state.sid} departure with ${state.sidTrans} transition, squawk ${inputSquawkHtml}, read back.` },
                         { role: 'PILOT', text: `Cleared to ${dest}, flight level ${fl}, runway ${rwy} via ${sid} departure, ${trans} transition, squawk ${sqwk}, ${cs}.` },
-                        { role: 'ATC', station: clrAtc.title, text: `${spokenCs} readback is correct, report when ready for pushback and engine start.` },
-                        { role: 'PILOT', text: `We'll call you ready for push and start, ${cs}, thank you!` }
+                        { role: 'ATC', station: clrAtc.title, text: mudaParaSolo ? `${spokenCs} readback correct, contact ${gndDepAtc.call} on ${gndDepAtc.freq} when ready for pushback.` : `${spokenCs} readback correct, maintain this frequency and report when ready for pushback.` },
+                        { role: 'PILOT', text: mudaParaSolo ? `Will contact ${gndDepAtc.call} on ${gndDepAtc.freq} for pushback, ${cs}!` : `Maintaining frequency, we'll call ready for push and start, ${cs}!` }
                     ];
                 } else {
                     return [
@@ -1505,19 +1851,18 @@
                             `Livre ${dest} no ${fl}, pista ${rwy}, saída ${sid} transição ${trans}, transponder ${sqwk} pro ${cs}.`,
                             `Autorizado plano de voo para ${dest}, nível de voo ${fl}, decola da pista ${rwy}, perfil de saída ${sid} com transição em ${trans}, código transponder ${sqwk} para o ${cs}.`
                         ][v] },
-                        { role: 'ATC', station: clrAtc.title, text: `${spokenCs} o cotejamento está correto, reporte quando pronto para pushback e acionamento.` },
-                        { role: 'PILOT', text: [
-                            `Chama pronto para pushback e acionamento, obrigado, ${cs}!`,
-                            `Reporta pronto pro push e acionamento, ${cs}.`,
-                            `Ciente, reportaremos quando prontos para o recuo e acionamento dos motores, ${cs}, grato!`,
-                            `Chama no pushback, ${cs}, valeu!`,
-                            `Vai reportar para pushback e acionamento o ${cs}, grato!`
-                        ][v] }
+                        { role: 'ATC', station: clrAtc.title, text: mudaParaSolo
+                            ? `${spokenCs} cotejamento correto, chame o ${gndDepAtc.call} na frequência ${gndDepAtc.freq} quando pronto para pushback e acionamento.`
+                            : `${spokenCs} o cotejamento está correto, mantenha esta frequência e reporte quando pronto para pushback e acionamento.`
+                        },
+                        { role: 'PILOT', text: mudaParaSolo
+                            ? `Vai chamar o ${gndDepAtc.call} na ${gndDepAtc.freq} para o pushback e acionamento, obrigado, ${cs}!`
+                            : `Mantém a frequência e chama pronto para pushback e acionamento, obrigado, ${cs}!`
+                        }
                     ];
                 }
             }
 
-            // 2. PUSHBACK E TÁXI
             if (phaseId === 'push_taxi') {
                 const pos = fmt(state.depGate, 'depGate', true, false, false, 'ALPHA');
                 const rwy = fmt(state.depRwy, 'inp-dep-rwy');
@@ -1526,6 +1871,8 @@
 
                 const inputTailHtml = `<input type="text" inputmode="none" data-atc-field="pushTailDir" value="${state.pushTailDir}" placeholder="DIREITA/ESQ" onfocus="abrirQuickPadPara('pushTailDir', 'Cauda no Pushback', 'TAIL')" oninput="atualizarInputTorre('pushTailDir', this.value)" class="inline-atc-input w-28 text-center uppercase">`;
                 const inputTwyHtml = `<input type="text" inputmode="none" data-atc-field="depTaxiways" value="${state.depTaxiways}" placeholder="Ex: A, B" onfocus="abrirQuickPadPara('depTaxiways', 'Taxiways de Saída', 'ALPHA')" oninput="atualizarInputTorre('depTaxiways', this.value)" class="inline-atc-input w-24 text-center uppercase">`;
+
+                const mudaParaTorre = twrDepAtc && twrDepAtc.callsign !== gndDepAtc.callsign;
 
                 const list = [
                     { role: 'PILOT', text: lang === 'EN' ? `${gndDepAtc.call}, ${cs} at stand ${pos}, ready for pushback and engine start.` : [
@@ -1536,7 +1883,7 @@
                         `${gndDepAtc.call}, ${cs} pronto para pushback e acionamento na posição ${pos}.`
                     ][v] },
                     { role: 'ATC', station: gndDepAtc.title, text: lang === 'EN' ? `${spokenCs}, pushback and engine start approved, face tail ${inputTailHtml}, report ready for taxi.` : `${spokenCs}, autorizado pushback e acionamento, oriente cauda à ${inputTailHtml}, reporte pronto para o táxi.` },
-                    { role: 'PILOT', text: lang === 'EN' ? `Pushback and start approved facing tail ${tailBadge}, we'll call ready for taxi, ${cs}.` : [
+                    { role: 'PILOT', text: lang === 'EN' ? `Pushback approved facing tail ${tailBadge}, we'll call ready for taxi, ${cs}.` : [
                         `Autorizado pushback e acionamento com cauda à ${tailBadge}, chama pronto para o táxi, ${cs}.`,
                         `Livre push e acionamento cauda à ${tailBadge}, chama pro táxi, ${cs}.`,
                         `Ciente, recuo e acionamento aprovados orientando cauda à ${tailBadge}, reportará pronto para o táxi, ${cs}.`,
@@ -1560,99 +1907,122 @@
                     ][v] }
                 ];
 
-                if (gndDepAtc.hasSeparateTower) {
+                if (mudaParaTorre) {
                     list.push(
-                        { role: 'ATC', station: gndDepAtc.title, text: lang === 'EN' ? `${spokenCs}, reaching the holding point contact ${twrDepAtc.call} on ${twrDepAtc.freq}.` : `${spokenCs}, no ponto de espera chame a ${twrDepAtc.call} na frequência ${twrDepAtc.freq}, bom voo!` },
-                        { role: 'PILOT', text: lang === 'EN' ? `Switching to ${twrDepAtc.call} on ${twrDepAtc.freq}, thank you, ${cs}.` : `Passando para a ${twrDepAtc.call} na ${twrDepAtc.freq}, obrigado pelo controle, ${cs}!` }
+                        { role: 'ATC', station: gndDepAtc.title, text: `${spokenCs}, no ponto de espera chame ${twrDepAtc.call} na frequência ${twrDepAtc.freq}, bom voo!` },
+                        { role: 'PILOT', text: `Passando para ${twrDepAtc.call} na ${twrDepAtc.freq}, obrigado pelo controle, ${cs}!` }
+                    );
+                } else {
+                    list.push(
+                        { role: 'PILOT', text: `${gndDepAtc.call}, ${cs} atingiu o ponto de espera da pista ${rwy} (mantendo esta frequência Top-Down), pronto para decolagem.` }
                     );
                 }
                 return list;
             }
 
-            // 3. DECOLAGEM
             if (phaseId === 'decolagem') {
                 const rwy = fmt(state.depRwy, 'inp-dep-rwy');
                 const qnh = fmt(state.depQnh, 'inp-dep-qnh', true, false, true, 'NUM');
-                const temDepAppOuCtr = isSlotActive('depApp') || isSlotActive('ctr');
-                const nextAtc = isSlotActive('depApp') ? appDepAtc : ctrAtc;
 
-                const nextPt = temDepAppOuCtr
-                    ? `chame o ${nextAtc.call} na frequência ${nextAtc.freq}`
-                    : `coordene na UNICOM frequência 122.800`;
+                const mesmoControladorNaSubida = appDepAtc && appDepAtc.callsign === twrDepAtc.callsign;
+                const mudaParaAppOuCtr = appDepAtc && appDepAtc.callsign !== twrDepAtc.callsign;
 
-                if (lang === 'EN') {
-                    return [
-                        { role: 'PILOT', text: `${twrDepAtc.call}, ${saudacao}, ${cs} holding short of runway ${rwy}, ready for departure.` },
-                        { role: 'ATC', station: twrDepAtc.title, text: `${spokenCs}, cleared for takeoff runway ${state.depRwy}, wind ${state.depWindDir} degrees at ${state.depWindSpd} knots, QNH ${state.depQnh}.` },
-                        { role: 'PILOT', text: `Cleared for takeoff runway ${rwy}, QNH ${qnh}, ${cs}.` },
-                        { role: 'ATC', station: twrDepAtc.title, text: `${spokenCs}, airborne at minute ${state.takeoffMin}, ${temDepAppOuCtr ? `contact ${nextAtc.call} on ${nextAtc.freq}` : 'switch to UNICOM 122.800'}, good flight!` },
-                        { role: 'PILOT', text: temDepAppOuCtr ? `Contacting ${nextAtc.call} on ${nextAtc.freq}, thank you, ${cs}!` : `Switching to UNICOM 122.800, thank you, ${cs}!` }
-                    ];
+                let postTakeoffAtcPt = '';
+                let postTakeoffPilotPt = '';
+                if (mesmoControladorNaSubida) {
+                    postTakeoffAtcPt = `${spokenCs}, decolado aos ${state.takeoffMin} minutos da hora, mantenha esta frequência para a subida e reporte cruzando altitude.`;
+                    postTakeoffPilotPt = `Ciente, mantém esta frequência na subida com o ${twrDepAtc.call}, ${cs}!`;
+                } else if (mudaParaAppOuCtr) {
+                    postTakeoffAtcPt = `${spokenCs}, decolado aos ${state.takeoffMin} minutos da hora, chame agora o ${appDepAtc.call} na frequência ${appDepAtc.freq}, bom voo!`;
+                    postTakeoffPilotPt = `Passando para o ${appDepAtc.call} na ${appDepAtc.freq}, obrigado pelo controle, ${cs}!`;
                 } else {
-                    return [
-                        { role: 'PILOT', text: [
-                            `${twrDepAtc.call}, ${saudacao}, é o ${cs} no ponto de espera da pista ${rwy}, pronto para decolagem.`,
-                            `${twrDepAtc.call}, ${saudacao}, ${cs} na espera da ${rwy}, pronto pra decolar.`,
-                            `${twrDepAtc.call}, muito ${saudacao}, o ${cs} encontra-se no ponto de espera da cabeceira ${rwy}, pronto para a decolagem.`,
-                            `${twrDepAtc.call}, ${saudacao}, ${cs} pronto na ${rwy}.`,
-                            `${twrDepAtc.call}, ${saudacao}, ${cs} está no ponto de espera da pista ${rwy}, pronto para decolagem.`
-                        ][v] },
-                        { role: 'ATC', station: twrDepAtc.title, text: `${spokenCs}, ciente, autorizada a decolagem da pista ${state.depRwy}, o vento é de ${state.depWindDir} graus com ${state.depWindSpd} nós, ajuste ${state.depQnh}.` },
-                        { role: 'PILOT', text: [
-                            `Livre decolagem na pista ${rwy}, ajuste ${qnh}, ${cs}.`,
-                            `Decola da ${rwy}, ajuste ${qnh}, ${cs}.`,
-                            `Ciente, autorizada a decolagem na pista ${rwy} com ajuste ${qnh}, ${cs}.`,
-                            `Autorizado decolar da ${rwy}, QNH ${qnh}, ${cs}.`,
-                            `Autorizada a decolagem pista ${rwy}, ajuste ${qnh}, ${cs}.`
-                        ][v] },
-                        { role: 'ATC', station: twrDepAtc.title, text: `${spokenCs}, decolado aos ${state.takeoffMin} minutos da hora, ${nextPt}, bom voo!` },
-                        { role: 'PILOT', text: temDepAppOuCtr
-                            ? `Passando para o ${nextAtc.call} na ${nextAtc.freq}, obrigado pelo controle, ${cs}!`
-                            : `Vai coordenar na frequência livre UNICOM 122.800 o ${cs}, obrigado pelo controle, bom serviço!`
-                        }
-                    ];
+                    postTakeoffAtcPt = `${spokenCs}, decolado aos ${state.takeoffMin} minutos da hora, sem controle superior online coordene na UNICOM frequência 122.800, bom voo!`;
+                    postTakeoffPilotPt = `Vai coordenar na frequência livre UNICOM 122.800 o ${cs}, obrigado pelo controle, bom serviço!`;
                 }
+
+                return [
+                    { role: 'PILOT', text: [
+                        `${twrDepAtc.call}, ${saudacao}, é o ${cs} no ponto de espera da pista ${rwy}, pronto para decolagem.`,
+                        `${twrDepAtc.call}, ${saudacao}, ${cs} na espera da ${rwy}, pronto pra decolar.`,
+                        `${twrDepAtc.call}, muito ${saudacao}, o ${cs} encontra-se no ponto de espera da cabeceira ${rwy}, pronto para a decolagem.`,
+                        `${twrDepAtc.call}, ${saudacao}, ${cs} pronto na ${rwy}.`,
+                        `${twrDepAtc.call}, ${saudacao}, ${cs} está no ponto de espera da pista ${rwy}, pronto para decolagem.`
+                    ][v] },
+                    { role: 'ATC', station: twrDepAtc.title, text: `${spokenCs}, ciente, autorizada a decolagem da pista ${state.depRwy}, o vento é de ${state.depWindDir} graus com ${state.depWindSpd} nós, ajuste ${state.depQnh}.` },
+                    { role: 'PILOT', text: [
+                        `Livre decolagem na pista ${rwy}, ajuste ${qnh}, ${cs}.`,
+                        `Decola da ${rwy}, ajuste ${qnh}, ${cs}.`,
+                        `Ciente, autorizada a decolagem na pista ${rwy} com ajuste ${qnh}, ${cs}.`,
+                        `Autorizado decolar da ${rwy}, QNH ${qnh}, ${cs}.`,
+                        `Autorizada a decolagem pista ${rwy}, ajuste ${qnh}, ${cs}.`
+                    ][v] },
+                    { role: 'ATC', station: twrDepAtc.title, text: postTakeoffAtcPt },
+                    { role: 'PILOT', text: postTakeoffPilotPt }
+                ];
             }
 
-            // 4. EM SUBIDA
             if (phaseId === 'subida') {
                 const sid = fmt(state.sid, 'inp-sid');
                 const restrBadge = fmt(state.climbRestriction, 'climbRestriction', true, false, false, 'TAIL');
                 const flAssignedBadge = fmt(state.assignedClimbFl, 'assignedClimbFl', true, false, true, 'NUM');
-                const temCentro = isSlotActive('ctr');
 
                 const inputPassAltHtml = `<input type="text" inputmode="none" data-atc-field="passingAlt" value="${state.passingAlt}" placeholder="Altitude" onfocus="abrirQuickPadPara('passingAlt', 'Altitude Passando', 'NUM')" oninput="atualizarInputTorre('passingAlt', this.value)" class="inline-atc-input w-20 text-center">`;
                 const inputRestrHtml = `<input type="text" inputmode="none" data-atc-field="climbRestriction" value="${state.climbRestriction}" placeholder="SEM RESTRIÇÕES" onfocus="abrirQuickPadPara('climbRestriction', 'Restrição Subida', 'TAIL')" oninput="atualizarInputTorre('climbRestriction', this.value)" class="inline-atc-input w-36 text-center uppercase">`;
                 const inputClimbFlHtml = `<input type="text" inputmode="none" data-atc-field="assignedClimbFl" value="${state.assignedClimbFl}" placeholder="FL" onfocus="abrirQuickPadPara('assignedClimbFl', 'Nível de Subida', 'NUM')" oninput="atualizarInputTorre('assignedClimbFl', this.value)" class="inline-atc-input w-16 text-center">`;
 
-                return [
-                    { role: 'PILOT', text: lang === 'EN' ? `${appDepAtc.call} ${saudacao}, ${cs} on ${sid} departure, passing ${inputPassAltHtml} feet.` : `${appDepAtc.call}, ${saudacao}, é o ${cs} decolado cumprindo a saída ${sid}, passando ${inputPassAltHtml} pés.` },
-                    { role: 'ATC', station: appDepAtc.title, text: lang === 'EN' ? `${spokenCs}, radar contact, climb ${inputRestrHtml} to flight level ${inputClimbFlHtml}.` : `${spokenCs} ${saudacao}, contato radar na decolagem, suba ${inputRestrHtml} para o nível de voo ${inputClimbFlHtml}.` },
-                    { role: 'PILOT', text: lang === 'EN' ? `Climbing ${restrBadge} to flight level ${flAssignedBadge}, ${cs}.` : `Livre subida ${restrBadge} para o nível de voo ${flAssignedBadge}, ${cs}.` },
-                    { role: 'ATC', station: appDepAtc.title, text: lang === 'EN' ? `${spokenCs}, contact ${temCentro ? `${ctrAtc.call} on ${ctrAtc.freq}` : 'UNICOM 122.800'}, good flight.` : `${spokenCs}, ciente, ${temCentro ? `chame o ${ctrAtc.call} na frequência ${ctrAtc.freq}` : 'coordene na UNICOM 122.800'}, bom voo.` },
-                    { role: 'PILOT', text: temCentro ? `Passando para o ${ctrAtc.call} na ${ctrAtc.freq}, obrigado, ${cs}!` : `Coordenará na UNICOM 122.800, obrigado pelo controle, ${cs}!` }
+                const mesmoCtrEmRota = ctrAtc && ctrAtc.callsign === appDepAtc.callsign;
+                const mudaParaCtr = ctrAtc && ctrAtc.callsign !== appDepAtc.callsign;
+
+                const list = [
+                    { role: 'PILOT', text: `${appDepAtc.call}, ${saudacao}, é o ${cs} decolado cumprindo a saída ${sid}, passando ${inputPassAltHtml} pés.` },
+                    { role: 'ATC', station: appDepAtc.title, text: `${spokenCs} ${saudacao}, contato radar na decolagem, suba ${inputRestrHtml} para o nível de voo ${inputClimbFlHtml}.` },
+                    { role: 'PILOT', text: `Livre subida ${restrBadge} para o nível de voo ${flAssignedBadge}, ${cs}.` }
                 ];
+
+                if (mesmoCtrEmRota) {
+                    list.push({ role: 'PILOT', text: `${appDepAtc.call}, ${cs} atingindo e mantendo o nível de voo ${flAssignedBadge} na sua escuta.` });
+                } else if (mudaParaCtr) {
+                    list.push(
+                        { role: 'ATC', station: appDepAtc.title, text: `${spokenCs}, ciente, chame agora o ${ctrAtc.call} na frequência ${ctrAtc.freq}, bom voo.` },
+                        { role: 'PILOT', text: `Passando para o ${ctrAtc.call} na ${ctrAtc.freq}, obrigado pelo controle, ${cs}!` }
+                    );
+                } else {
+                    list.push(
+                        { role: 'ATC', station: appDepAtc.title, text: `${spokenCs}, livrando os limites da terminal sem Centro ativo, coordene na UNICOM 122.800, bom voo.` },
+                        { role: 'PILOT', text: `Coordenará na UNICOM 122.800, obrigado pelo controle, ${cs}!` }
+                    );
+                }
+                return list;
             }
 
-            // 5. CRUZEIRO & TOD
             if (phaseId === 'cruzeiro') {
                 const fl = fmt(state.cruiseFl, 'inp-fl', true, false, true, 'NUM');
                 const star = fmt(state.star, 'inp-star');
                 const descFlBadge = fmt(state.assignedDescFl, 'assignedDescFl', true, false, true, 'NUM');
                 const inputDescFl = `<input type="text" inputmode="none" data-atc-field="assignedDescFl" value="${state.assignedDescFl}" placeholder="FL" onfocus="abrirQuickPadPara('assignedDescFl', 'Nível na Descida', 'NUM')" oninput="atualizarInputTorre('assignedDescFl', this.value)" class="inline-atc-input w-16 text-center">`;
-                const temArrApp = isSlotActive('arrApp') || isSlotActive('arrTwr');
-                const nextArr = isSlotActive('arrApp') ? appArrAtc : twrArrAtc;
+
+                const mesmoControladorNaChegada = appArrAtc && appArrAtc.callsign === ctrAtc.callsign;
+                const mudaParaAppChegada = appArrAtc && appArrAtc.callsign !== ctrAtc.callsign;
 
                 return [
                     { role: 'PILOT', text: `${ctrAtc.call}, ${saudacao}, é o ${cs} na escuta mantendo o nível de voo ${fl}.` },
                     { role: 'ATC', station: ctrAtc.title, text: `${spokenCs}, ${saudacao}, contato radar, mantenha o nível de voo ${state.cruiseFl}.` },
                     { role: 'PILOT', text: `${ctrAtc.call}, o ${cs} atingiu o ideal de descida, solicita descer no perfil da chegada ${star}.` },
-                    { role: 'ATC', station: ctrAtc.title, text: `${spokenCs}, autorizado início de descida no perfil ${state.star} para o nível de voo ${inputDescFl}, ${temArrApp ? `chame o ${nextArr.call} na frequência ${nextArr.freq}` : 'coordene na UNICOM 122.800'}, bom pouso!` },
-                    { role: 'PILOT', text: temArrApp ? `Iniciando descida na ${star} para o nível ${descFlBadge}, passando para o ${nextArr.call} na ${nextArr.freq}, obrigado, ${cs}!` : `Descendo para o nível ${descFlBadge} na ${star} e coordenando na UNICOM 122.800, obrigado, ${cs}!` }
+                    { role: 'ATC', station: ctrAtc.title, text: mesmoControladorNaChegada
+                        ? `${spokenCs}, autorizado início de descida no perfil ${state.star} para o nível de voo ${inputDescFl}, mantenha esta frequência para aproximação em ${state.arrName}.`
+                        : (mudaParaAppChegada
+                            ? `${spokenCs}, autorizado início de descida no perfil ${state.star} para o nível de voo ${inputDescFl}, chame o ${appArrAtc.call} na frequência ${appArrAtc.freq}, bom pouso!`
+                            : `${spokenCs}, autorizado descida para o nível ${inputDescFl}, coordene aproximação na UNICOM 122.800.`)
+                    },
+                    { role: 'PILOT', text: mesmoControladorNaChegada
+                        ? `Iniciando descida na ${star} para o nível ${descFlBadge}, mantendo esta frequência com o ${ctrAtc.call}, ${cs}!`
+                        : (mudaParaAppChegada
+                            ? `Iniciando descida na ${star} para o nível ${descFlBadge}, passando para o ${appArrAtc.call} na ${appArrAtc.freq}, obrigado, ${cs}!`
+                            : `Descendo para o nível ${descFlBadge} na ${star} e coordenando na UNICOM 122.800, obrigado, ${cs}!`)
+                    }
                 ];
             }
 
-            // 6. APROXIMAÇÃO
             if (phaseId === 'aproximacao') {
                 const inputDescFl = `<input type="text" inputmode="none" data-atc-field="assignedDescFl" value="${state.assignedDescFl}" placeholder="FL" onfocus="abrirQuickPadPara('assignedDescFl', 'Nível na Descida', 'NUM')" oninput="atualizarInputTorre('assignedDescFl', this.value)" class="inline-atc-input w-16 text-center">`;
                 const descFlBadge = fmt(state.assignedDescFl, 'assignedDescFl', true, false, true, 'NUM');
@@ -1660,7 +2030,8 @@
                 const appProcAtc = fmtAppProcedure(false);
                 const arrRwy = fmt(state.arrRwy, 'inp-arr-rwy');
                 const star = fmt(state.star, 'inp-star');
-                const temTwrArr = isSlotActive('arrTwr');
+
+                const mesmoControladorNoPouso = twrArrAtc && twrArrAtc.callsign === appArrAtc.callsign;
 
                 return [
                     { role: 'PILOT', text: `${appArrAtc.call}, ${saudacao}, é o ${cs} em descida na chegada ${star}.` },
@@ -1669,26 +2040,39 @@
                     { role: 'ATC', station: appArrAtc.title, text: `${spokenCs} autorizado procedimento ${appProcAtc}, pista ${state.arrRwy}, reporte estabilizado.` },
                     { role: 'PILOT', text: `Autorizado ${appProcPilot} para a pista ${arrRwy}, chama estabilizado, ${cs}.` },
                     { role: 'PILOT', text: `${appArrAtc.call}, o ${cs} está estabilizado no ${appProcPilot} da pista ${arrRwy}.` },
-                    { role: 'ATC', station: appArrAtc.title, text: `${spokenCs} ${temTwrArr ? `chame agora a ${twrArrAtc.call} na frequência ${twrArrAtc.freq}` : 'coordene na UNICOM 122.800'}, bom pouso!` },
-                    { role: 'PILOT', text: temTwrArr ? `Passando para a ${twrArrAtc.call} na ${twrArrAtc.freq}, obrigado, ${cs}!` : `Vai coordenar o pouso na UNICOM 122.800, obrigado pelo controle, ${cs}!` }
+                    { role: 'ATC', station: appArrAtc.title, text: mesmoControladorNoPouso
+                        ? `${spokenCs} ciente, mantenha esta frequência na final (cobertura Top-Down da pista ${state.arrRwy}).`
+                        : `${spokenCs} chame agora a ${twrArrAtc.call} na frequência ${twrArrAtc.freq}, bom pouso!`
+                    },
+                    { role: 'PILOT', text: mesmoControladorNoPouso
+                        ? `Mantendo esta frequência na final da pista ${arrRwy}, ${cs}!`
+                        : `Passando para a ${twrArrAtc.call} na ${twrArrAtc.freq}, obrigado, ${cs}!`
+                    }
                 ];
             }
 
-            // 7. POUSANDO
             if (phaseId === 'pousando') {
                 const arrRwy = fmt(state.arrRwy, 'inp-arr-rwy');
                 const arrQnh = fmt(state.arrQnh, 'inp-arr-qnh', true, false, true, 'NUM');
                 const vacatedTwy = state.vacatedTaxiway ? ` na ${converterTaxiwayFonetico(state.vacatedTaxiway)}` : '';
+                const mudaParaSoloDestino = gndArrAtc && gndArrAtc.callsign !== twrArrAtc.callsign;
 
-                return [
+                const list = [
                     { role: 'PILOT', text: `${twrArrAtc.call}, ${saudacao}, é o ${cs} na final da pista ${arrRwy}, trem baixado e travado.` },
                     { role: 'ATC', station: twrArrAtc.title, text: `${spokenCs} ${saudacao}, pouso autorizado pista ${state.arrRwy}, vento de ${state.arrWindDir} graus com ${state.arrWindSpd} nós, ajuste ${state.arrQnh}, reporte livrando a pista.` },
                     { role: 'PILOT', text: `Livre pouso na pista ${arrRwy}, ajuste ${arrQnh}, chama livrando, ${cs}.` },
                     { role: 'PILOT', text: `${twrArrAtc.call}, o ${cs} livrou a pista ${arrRwy}${vacatedTwy}.` }
                 ];
+
+                if (mudaParaSoloDestino) {
+                    list.push(
+                        { role: 'ATC', station: twrArrAtc.title, text: `${spokenCs}, pista livre, chame o ${gndArrAtc.call} na frequência ${gndArrAtc.freq} para o táxi até o pátio.` },
+                        { role: 'PILOT', text: `Vai chamar o ${gndArrAtc.call} na ${gndArrAtc.freq}, obrigado, ${cs}!` }
+                    );
+                }
+                return list;
             }
 
-            // 8. TÁXI CHEGADA
             if (phaseId === 'taxi_chegada') {
                 const inputArrTwy = `<input type="text" inputmode="none" data-atc-field="arrTaxiways" value="${state.arrTaxiways}" placeholder="Ex: C, D" onfocus="abrirQuickPadPara('arrTaxiways', 'Taxiways até o Gate', 'ALPHA')" oninput="atualizarInputTorre('arrTaxiways', this.value)" class="inline-atc-input w-24 text-center uppercase">`;
                 const inputArrGate = `<input type="text" inputmode="none" data-atc-field="arrGate" value="${state.arrGate}" placeholder="Gate" onfocus="abrirQuickPadPara('arrGate', 'Gate de Chegada', 'ALPHA')" oninput="atualizarInputTorre('arrGate', this.value)" class="inline-atc-input w-16 text-center uppercase">`;
@@ -1708,7 +2092,7 @@
         }
 
         // ============================================================================
-        // 8. COORDENAÇÃO LIVRE UNICOM 122.800 (QUANDO NÃO HÁ TORRE CONECTADA)
+        // 10. COORDENAÇÃO LIVRE UNICOM 122.800
         // ============================================================================
         function construirDialogosUnicomInterativo(phaseId, lang, v, cs) {
             const depName = fmt(state.depName, 'inp-dep-name');
@@ -1729,6 +2113,7 @@
             const vacatedTwyBadge = state.vacatedTaxiway ? ` via taxiway <span class="filled-badge">${converterTaxiwayFonetico(state.vacatedTaxiway)}</span>` : '';
             const arrTwyBadge = fmt(state.arrTaxiways, 'arrTaxiways', true, true, false, 'ALPHA');
             const arrGate = fmt(state.arrGate, 'arrGate', true, false, false, 'ALPHA');
+            const twrArrOnline = resolverTopDownParaPosicao('ARR_TWR', lang);
 
             if (phaseId === 'autorizacao') {
                 const helperHtml = `
@@ -1745,10 +2130,7 @@
                 `;
                 return [
                     { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Pátio', html: helperHtml },
-                    { role: 'UNICOM', text: lang === 'EN'
-                        ? `${depName} traffic, ${cs} (${state.aircraft}) at stand ${depGate}, preparing for ${state.flightRules} flight to ${arrName}, flight level ${fl}, departure runway ${depRwy} via ${sid}.`
-                        : `Tráfego de ${depName}, ${cs} na posição ${depGate}, em preparação para voo ${state.flightRules} com destino a ${arrName} no nível de voo ${fl}, previsão de saída pista ${depRwy} no perfil ${sid}.`
-                    }
+                    { role: 'UNICOM', text: `Tráfego de ${depName}, ${cs} na posição ${depGate}, em preparação para voo ${state.flightRules} com destino a ${arrName} no nível de voo ${fl}, previsão de saída pista ${depRwy} no perfil ${sid}.` }
                 ];
             }
 
@@ -1843,7 +2225,7 @@
                 return [
                     { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Aproximação', html: helperHtml },
                     { role: 'UNICOM', text: `Tráfego de ${arrName}, ${cs} iniciando o procedimento ${appProc} para a pista ${arrRwy}, ajuste ${arrQnh}.` },
-                    { role: 'UNICOM', text: `Tráfego de ${arrName}, ${cs} estabilizado no ${appProc}, pista ${arrRwy}.` }
+                    { role: 'UNICOM', text: `Tráfego de ${arrName}, ${cs} estabilizado no ${appProc}, pista ${arrRwy}${twrArrOnline ? `, passando para a ${twrArrOnline.call} na frequência ${twrArrOnline.freq}` : ''}.` }
                 ];
             }
 
@@ -1891,18 +2273,27 @@
         }
 
         // ============================================================================
-        // 9. RENDERIZAÇÃO RESPONSIVA (MOBILE & DESKTOP)
+        // 11. RENDERIZAÇÃO DA TIMELINE E NAVEGAÇÃO
         // ============================================================================
         function renderizarMenuFases() {
             const sideContainer = document.getElementById('sidebar-phases');
-            const mobContainer = document.getElementById('mobile-phases');
+            const mobContainer = document.getElementById('mobile-phase-bar');
             sideContainer.innerHTML = '';
             mobContainer.innerHTML = '';
 
             flightPhases.forEach(p => {
                 const active = state.selectedPhase === p.id;
-                const temAtc = p.id === 'ALL' ? false : faseTemAtcOnline(p.id);
-                const dotHtml = p.id === 'ALL' ? '' : `<span class="w-2 h-2 rounded-full ml-auto ${temAtc ? 'bg-emerald-400' : 'bg-blue-400/60'}" title="${temAtc ? 'Torre/Controle Online' : 'Coordenação UNICOM 122.800'}"></span>`;
+                const effAtc = p.id === 'ALL' ? null : obterAtcEfetivoDaFase(p.id);
+                let dotHtml = '';
+                if (p.id !== 'ALL') {
+                    if (effAtc && !effAtc.isTopDown) {
+                        dotHtml = `<span class="w-2 h-2 rounded-full ml-auto bg-emerald-400" title="Online Direto: ${effAtc.callsign}"></span>`;
+                    } else if (effAtc && effAtc.isTopDown) {
+                        dotHtml = `<span class="w-2 h-2 rounded-full ml-auto bg-purple-400" title="Top-Down: ${effAtc.callsign}"></span>`;
+                    } else {
+                        dotHtml = `<span class="w-2 h-2 rounded-full ml-auto bg-blue-400/50" title="UNICOM 122.800"></span>`;
+                    }
+                }
 
                 const btn = document.createElement('button');
                 btn.onclick = () => selecionarFase(p.id);
@@ -1945,6 +2336,7 @@
             const container = document.getElementById('dialogue-container');
             container.innerHTML = '';
 
+            const isMob = state.deviceMode === 'MOBILE';
             const fasesParaExibir = state.selectedPhase === 'ALL'
                 ? flightPhases.filter(p => p.id !== 'ALL')
                 : flightPhases.filter(p => p.id === state.selectedPhase);
@@ -1952,18 +2344,23 @@
             let destacouProxima = false;
 
             fasesParaExibir.forEach(phase => {
-                const temAtc = faseTemAtcOnline(phase.id);
+                const effAtc = obterAtcEfetivoDaFase(phase.id);
                 const mensagens = construirDialogosPorFase(phase.id);
                 const section = document.createElement('div');
                 section.className = 'space-y-3';
 
-                const modeBadge = temAtc
-                    ? `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] font-mono">🗼 ATC ONLINE</span>`
-                    : `<span class="bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded text-[10px] font-mono">📻 SEM TORRE ➔ UNICOM 122.800</span>`;
+                let modeBadge = '';
+                if (effAtc && !effAtc.isTopDown) {
+                    modeBadge = `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] font-mono">🟢 DIRETO: ${effAtc.callsign} (${effAtc.freq})</span>`;
+                } else if (effAtc && effAtc.isTopDown) {
+                    modeBadge = `<span class="bg-purple-500/25 text-purple-200 border border-purple-400/50 px-2 py-0.5 rounded text-[10px] font-mono">🟣 TOP-DOWN: ${effAtc.call} (${effAtc.callsign} • ${effAtc.freq})</span>`;
+                } else {
+                    modeBadge = `<span class="bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded text-[10px] font-mono">📻 UNICOM 122.800</span>`;
+                }
 
                 section.innerHTML = `
                     <div class="flex flex-wrap items-center justify-center gap-2 my-2">
-                        <div class="bg-slate-900 border border-slate-700 text-white px-3.5 py-1 rounded-lg text-xs font-bold flex items-center gap-2 shadow">
+                        <div class="bg-slate-900 border border-slate-700 text-white px-3 py-1 rounded-lg text-xs font-bold flex flex-wrap items-center gap-2 shadow">
                             <span>${phase.name}</span>
                             ${modeBadge}
                         </div>
@@ -1988,30 +2385,30 @@
                             ? `<span class="bg-emerald-500 text-slate-950 text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase">▶ LER AGORA</span>`
                             : (isDone ? `<span class="text-emerald-400 text-[10px] font-bold">✔ Lido</span>` : '');
 
-                        row.className = 'flex items-start justify-end gap-2 pl-2 sm:pl-10 md:pl-16';
+                        row.className = isMob ? 'flex items-start justify-end w-full' : 'flex items-start justify-end gap-2 pl-12';
                         row.innerHTML = `
-                            <div class="${isUnicom ? 'unicom-bubble' : 'pilot-bubble'} ${highlightCls} text-slate-100 px-3.5 py-2.5 rounded-2xl rounded-tr-sm w-full sm:w-auto max-w-2xl">
+                            <div class="${isUnicom ? 'unicom-bubble' : 'pilot-bubble'} ${highlightCls} text-slate-100 px-3.5 py-2.5 rounded-2xl rounded-tr-sm w-full ${isMob ? '' : 'max-w-2xl'}">
                                 <div class="flex items-center justify-between gap-2 mb-1">
                                     <span class="text-[10px] font-mono uppercase ${isUnicom ? 'text-blue-300' : 'text-slate-400'} font-bold">
-                                        ${isUnicom ? '📻 UNICOM 122.800' : `🎙️ Piloto • ${obterCallsignFalado(state.callsign)}`}
+                                        ${isUnicom ? '📻 UNICOM 122.800' : `🎙️ Piloto ➔ ${effAtc ? `${effAtc.call} (${effAtc.freq})` : ''}`}
                                     </span>
                                     ${nextBadge}
                                 </div>
-                                <div class="text-xs sm:text-sm md:text-[15px] leading-relaxed font-medium select-text pilot-speech-text">${msg.text}</div>
+                                <div class="${isMob ? 'text-sm' : 'text-[15px]'} leading-relaxed font-medium select-text pilot-speech-text">${msg.text}</div>
                                 <div class="flex items-center justify-end gap-2 mt-2 pt-1 border-t border-slate-700/60">
-                                    <button onclick="marcarFalaLida('${speechKey}')" class="px-2 py-0.5 rounded text-[10px] font-bold transition ${isDone ? 'bg-emerald-600 text-white' : 'bg-slate-800 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40'}">
+                                    <button onclick="marcarFalaLida('${speechKey}')" class="px-2.5 py-1 rounded text-[11px] font-bold transition ${isDone ? 'bg-emerald-600 text-white' : 'bg-slate-800 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40'}">
                                         ${isDone ? '✔ Transmitida' : '✔ Marcar Lido'}
                                     </button>
-                                    <button onclick="copiarFala(this)" class="text-slate-300 hover:text-white p-1 rounded"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="copiarFala(this)" class="text-slate-300 hover:text-white p-1 rounded"><i data-lucide="copy" class="w-4 h-4"></i></button>
                                     <button onclick="falarTexto(this)" class="text-slate-300 hover:text-emerald-400 p-1 rounded"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
                                 </div>
                             </div>
                         `;
                     } else if (msg.role === 'ATC') {
-                        row.className = 'flex items-start justify-start gap-2 pr-2 sm:pr-10 md:pr-16';
+                        row.className = isMob ? 'flex items-start justify-start w-full' : 'flex items-start justify-start gap-2 pr-12';
                         row.innerHTML = `
-                            <div class="atc-bubble px-3.5 py-2.5 rounded-2xl rounded-tl-sm w-full sm:w-auto max-w-2xl">
-                                <div class="text-xs sm:text-sm md:text-[15px] leading-relaxed font-medium select-text">${msg.text}</div>
+                            <div class="atc-bubble px-3.5 py-2.5 rounded-2xl rounded-tl-sm w-full ${isMob ? '' : 'max-w-2xl'}">
+                                <div class="${isMob ? 'text-sm' : 'text-[15px]'} leading-relaxed font-medium select-text">${msg.text}</div>
                                 <div class="mt-1.5 pt-1 border-t border-slate-300/80 flex items-center justify-between text-[10px] text-slate-600 font-semibold">
                                     <span>🗼 ${msg.station}</span>
                                     <span class="text-blue-700 font-mono">Toque na caixa azul p/ editar</span>
@@ -2019,9 +2416,9 @@
                             </div>
                         `;
                     } else if (msg.role === 'UNICOM_HELPER') {
-                        row.className = 'flex items-start justify-start gap-2 pr-2 sm:pr-10 md:pr-16';
+                        row.className = 'flex items-start justify-start w-full';
                         row.innerHTML = `
-                            <div class="unicom-helper-card px-3.5 py-2.5 rounded-xl w-full max-w-md">
+                            <div class="unicom-helper-card px-3.5 py-2.5 rounded-xl w-full ${isMob ? '' : 'max-w-md'}">
                                 <div class="text-[10px] font-bold uppercase text-blue-400 mb-1.5 flex items-center justify-between">
                                     <span>⚙️ ${msg.title}</span>
                                     <span class="text-[9px] font-mono text-amber-300">Toque p/ preencher</span>
@@ -2042,7 +2439,7 @@
         }
 
         // ============================================================================
-        // 10. HELPERS DE FORMULÁRIO, VOZ E CONTROLES DE TELA
+        // 12. HELPERS DE FORMULÁRIO, VOZ E CONTROLES DE TELA
         // ============================================================================
         function fmt(valor, targetId, darkBg = true, isTaxiway = false, isNum = false, qpMode = 'ALPHA') {
             if (!valor || String(valor).trim() === '') {
@@ -2084,7 +2481,6 @@
                 if (el) el.value = val !== undefined && val !== null ? val : '';
             });
             document.getElementById('callsign-spoken-badge').innerText = `🗣️ ${obterCallsignFalado(state.callsign)}`;
-            document.getElementById('hdr-route-summary').innerText = `${state.depIcao} ➔ ${state.arrIcao}`;
             atualizarContadorCamposFaltantes();
         }
 
@@ -2105,9 +2501,12 @@
                     document.getElementById('inp-arr-name').value = state.arrName;
                 }
             }
-            document.getElementById('hdr-route-summary').innerText = `${state.depIcao} ➔ ${state.arrIcao}`;
-            if (code.length === 4) verificarRedesOnline();
-            else renderizarDialogos();
+            if (code.length === 4) {
+                state.knownOnlineCallsigns.clear();
+                verificarRedesOnline(false);
+            } else {
+                renderizarDialogos();
+            }
         }
 
         function atualizarCampo(chave, valor, reRender = true) {
@@ -2140,14 +2539,11 @@
         function atualizarContadorCamposFaltantes() {
             const campos = ['depGate', 'depAtis', 'pushTailDir', 'depTaxiways', 'appLetter', 'assignedDescFl', 'arrTaxiways', 'arrGate'];
             const faltando = campos.filter(k => !state[k] || String(state[k]).trim() === '').length;
-            const badge = document.getElementById('missing-count-badge');
-            badge.innerText = faltando === 0 ? 'OK' : faltando;
+            document.getElementById('missing-count-badge').innerText = faltando === 0 ? 'OK' : faltando;
         }
 
         function togglePainelDados() {
-            const p = document.getElementById('briefing-panel');
-            p.classList.toggle('hidden');
-            p.classList.toggle('md:block');
+            document.getElementById('briefing-panel').classList.toggle('hidden');
         }
 
         function togglePainelAtc() {
@@ -2155,8 +2551,7 @@
         }
 
         function togglePainelTatico() {
-            const p = document.getElementById('tactical-panel');
-            p.classList.toggle('hidden');
+            document.getElementById('tactical-panel').classList.toggle('hidden');
             renderizarFrasesTaticas();
         }
 
@@ -2193,7 +2588,7 @@
 
         function atualizarTextoGoAround() {
             const cs = obterCallsignFalado(state.callsign);
-            const twr = obterOrgaoAtcParaFase('ARR_TOWER').call;
+            const twr = resolverTopDownParaPosicao('ARR_TWR')?.call || `Torre ${state.arrRadioName}`;
             document.getElementById('ga-tower-text').innerText = `${twr}, o ${cs} está arremetendo na pista ${state.arrRwy}, cumprindo perfil de aproximação perdida, subindo para ${state.goAroundAlt} pés!`;
             document.getElementById('ga-unicom-text').innerText = `Tráfego de ${state.arrName}, ${cs} arremetendo na pista ${state.arrRwy}, subindo para ${state.goAroundAlt} pés!`;
         }
@@ -2225,14 +2620,15 @@
             state.speechLang = lang;
             document.getElementById('lang-pt').className = `px-1.5 py-0.5 rounded font-bold transition ${lang === 'PT' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`;
             document.getElementById('lang-en').className = `px-1.5 py-0.5 rounded font-bold transition ${lang === 'EN' ? 'bg-blue-600 text-white' : 'text-slate-400'}`;
+            renderizarPainelAtc();
             renderizarDialogos();
         }
 
         function setModoATC(modo) {
             state.atcMode = modo;
             document.getElementById('mode-auto').className = `px-2 py-0.5 rounded font-bold transition ${modo === 'AUTO' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`;
-            document.getElementById('mode-online').className = `px-2 py-0.5 rounded font-semibold transition ${modo === 'ONLINE' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`;
-            document.getElementById('mode-unicom').className = `px-2 py-0.5 rounded font-semibold transition ${modo === 'UNICOM' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('mode-online').className = `px-1.5 py-0.5 rounded font-semibold transition ${modo === 'ONLINE' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('mode-unicom').className = `px-1.5 py-0.5 rounded font-semibold transition ${modo === 'UNICOM' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`;
             renderizarPainelAtc();
             renderizarDialogos();
         }
@@ -2241,7 +2637,8 @@
             state.network = rede;
             document.getElementById('net-ivao').className = `px-1.5 py-0.5 rounded font-bold transition ${rede === 'IVAO' ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30' : 'text-slate-400'}`;
             document.getElementById('net-vatsim').className = `px-1.5 py-0.5 rounded font-bold transition ${rede === 'VATSIM' ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30' : 'text-slate-400'}`;
-            verificarRedesOnline();
+            state.knownOnlineCallsigns.clear();
+            verificarRedesOnline(false);
         }
 
         function falarTexto(btn) {
@@ -2272,11 +2669,11 @@
             navigator.clipboard.writeText(clone.innerText).then(() => mostrarToast('Fala copiada!', 'success'));
         }
 
-        function mostrarToast(msg, tipo = 'info') {
+        function mostrarToast(msg) {
             const toast = document.getElementById('toast');
             document.getElementById('toast-text').innerText = msg;
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
+            setTimeout(() => toast.classList.remove('show'), 3200);
         }
 
         window.onload = init;
