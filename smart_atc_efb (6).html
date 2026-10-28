@@ -1,0 +1,2619 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart ATC EFB Pro - Fraseologia Realista ATC & UNICOM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .pilot-bubble {
+            background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+            border: 1px solid #475569;
+            box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.45);
+        }
+        .atc-bubble {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.25);
+        }
+        .unicom-bubble {
+            background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+            border: 1px solid #3b82f6;
+            box-shadow: 0 4px 15px -2px rgba(30, 58, 138, 0.5);
+        }
+        .unicom-helper-card {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            border: 1px solid #3b82f6;
+            box-shadow: 0 4px 15px -2px rgba(15, 23, 42, 0.6);
+        }
+        .inline-atc-input {
+            background-color: #ffffff;
+            color: #0f172a;
+            border: 2px solid #3b82f6;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            display: inline-block;
+            margin: 2px 3px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+            transition: all 0.15s ease;
+        }
+        .inline-atc-input::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        .inline-atc-input:focus {
+            outline: none;
+            border-color: #1d4ed8;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        .unicom-input {
+            background-color: #090d16;
+            color: #38bdf8;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            width: 100%;
+            transition: all 0.15s ease;
+        }
+        .unicom-input::placeholder {
+            color: #64748b;
+            font-weight: 400;
+        }
+        .unicom-input:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+        }
+        .missing-badge {
+            background-color: rgba(245, 158, 11, 0.22);
+            color: #fbbf24;
+            border: 1px dashed #f59e0b;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-block;
+        }
+        .missing-badge:hover {
+            background-color: rgba(245, 158, 11, 0.38);
+            transform: scale(1.03);
+        }
+        .filled-badge {
+            color: #38bdf8;
+            font-weight: 700;
+        }
+        .atc-filled-badge {
+            color: #0369a1;
+            font-weight: 700;
+        }
+        #toast {
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col bg-slate-950 select-none">
+
+    <!-- Datalists de Sugestões Rápidas para Cauda e Restrições -->
+    <datalist id="push-tail-list">
+        <option value="DIREITA"></option>
+        <option value="ESQUERDA"></option>
+        <option value="A CRITÉRIO"></option>
+    </datalist>
+    <datalist id="climb-restr-list">
+        <option value="SEM RESTRIÇÕES"></option>
+        <option value="CONFORME PERFIL"></option>
+        <option value="CUMPRINDO RESTRIÇÕES"></option>
+    </datalist>
+
+    <!-- 1. BARRA DE STATUS SUPERIOR DO EFB (COM SAUDAÇÃO ESTRITAMENTE EM LETRA MAIÚSCULA) -->
+    <header class="h-11 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 bg-blue-600/20 border border-blue-500/40 text-blue-400 px-2.5 py-1 rounded-lg text-xs font-bold">
+                <i data-lucide="radio-tower" class="w-4 h-4"></i>
+                <span>SMART ATC EFB PRO</span>
+            </div>
+            <span class="text-xs text-slate-400 hidden lg:inline">Gerador Inteligente de Fraseologia ATC & UNICOM • SimBrief + IVAO + VATSIM</span>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs font-mono">
+            <div class="flex items-center gap-2 text-slate-300 bg-slate-800 px-3 py-1 rounded-md border border-slate-700">
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-blue-400"></i>
+                <span id="utc-clock">00:00 ZULU</span>
+                <span class="text-slate-600">|</span>
+                <span id="local-clock" class="text-slate-400">00:00 LOC</span>
+                <span class="text-slate-600">|</span>
+                <!-- SAUDAÇÃO SEMPRE EM LETRA MAIÚSCULA -->
+                <span id="greeting-preview" class="text-emerald-400 font-sans font-extrabold tracking-wider uppercase">BOA TARDE</span>
+            </div>
+            <div class="hidden sm:flex items-center gap-1.5 text-emerald-400 font-semibold">
+                <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+                <span>ACARS ATIVO</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. BARRA DE CONTROLES PRINCIPAIS (SIMBRIEF 1-CLIQUE, VARIAÇÃO, MODO TORRE/UNICOM, REDE E IDIOMA DAS FALAS) -->
+    <section class="bg-slate-900/95 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 z-20">
+        
+        <!-- Bloco SimBrief com Salvamento Automático -->
+        <div class="flex items-center gap-2 flex-wrap">
+            <!-- Estado: ID ainda não salvo ou em edição -->
+            <div id="simbrief-input-group" class="flex items-center gap-1.5">
+                <input type="text" id="simbrief-user-input" placeholder="Usuário ou Pilot ID SimBrief" 
+                    class="bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-lg px-3 py-1.5 text-xs text-white w-48 focus:outline-none">
+                <button onclick="salvarECarregarSimBrief()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+                    <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                    <span>Salvar & Carregar</span>
+                </button>
+            </div>
+
+            <!-- Estado: ID Já Salvo (1 Clique!) -->
+            <div id="simbrief-saved-group" class="hidden items-center gap-1.5">
+                <button onclick="carregarSimBriefSalvo()" id="btn-load-simbrief" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md shadow-blue-950/50">
+                    <i data-lucide="cloud-download" class="w-4 h-4"></i>
+                    <span id="btn-simbrief-label">📥 Carregar Dados do SimBrief</span>
+                </button>
+                <div class="flex items-center gap-1 bg-slate-800/90 border border-slate-700 px-2 py-1 rounded-lg text-xs">
+                    <span class="text-slate-400">ID:</span>
+                    <span id="saved-simbrief-badge" class="font-mono font-bold text-blue-400">---</span>
+                    <button onclick="editarSimBriefId()" title="Trocar Usuário/ID do SimBrief" class="ml-1 text-slate-400 hover:text-white p-0.5 rounded">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Botão Carregar Voo Demo (Testar Cidades / Aeroportos) -->
+            <button onclick="carregarVooDemonstracao()" class="bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition" title="Alterna entre rotas de exemplo (ex: Belém ➔ Porto Alegre, Guarulhos/São Paulo ➔ Santos Dumont/Rio)">
+                <i data-lucide="plane" class="w-3.5 h-3.5"></i>
+                <span>Rota Demo</span>
+            </button>
+
+            <!-- Botão para abrir/fechar Painel de Procedimentos (Saída / Chegada) -->
+            <button onclick="togglePainelDados()" id="btn-toggle-briefing" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                <i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span>Saída / Chegada</span>
+                <span id="missing-count-badge" class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full text-[10px] font-mono">0</span>
+                <i data-lucide="chevron-up" id="icon-chevron-briefing" class="w-3.5 h-3.5"></i>
+            </button>
+
+            <!-- Botão para abrir/fechar Painel de ATC Disponível -->
+            <button onclick="togglePainelAtc()" id="btn-toggle-atc" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                <i data-lucide="radar" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span>Radar ATC</span>
+                <span id="online-atc-count-badge" class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded-full text-[10px] font-mono">0 online</span>
+            </button>
+        </div>
+
+        <!-- Controles de Variação, Modo Torre/UNICOM, Rede e Idioma Exclusivo das Falas -->
+        <div class="flex items-center gap-2 flex-wrap">
+            
+            <!-- Seletor e Botão de 5 Estilos Reais de Linha Aérea (Azul / LATAM / Gol / DECEA) -->
+            <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-emerald-500/40 text-xs">
+                <button onclick="sortearVariacao()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 transition shadow-sm" title="Alternar entre os 5 estilos reais de fonia de linha aérea">
+                    <span>🎲 Variar Falas</span>
+                    <span id="variation-badge" class="bg-black/30 text-emerald-200 px-1.5 py-0.2 rounded text-[10px] font-mono">1/5</span>
+                </button>
+                <select id="style-selector" onchange="selecionarEstiloFala(this.value)" class="bg-slate-950 text-emerald-300 font-semibold px-2 py-1 rounded-md focus:outline-none cursor-pointer text-[11px]" title="Escolha o perfil de fala do piloto">
+                    <option value="0">1. Comercial Fluido (Azul / LATAM)</option>
+                    <option value="1">2. Comandante Veterano (Direto/Curto)</option>
+                    <option value="2">3. Copiloto Linha Aérea (Cortês)</option>
+                    <option value="3">4. Ponte Aérea / Rush (Fonia Ágil)</option>
+                    <option value="4">5. Padrão Estrito DECEA (ICA 100-12)</option>
+                </select>
+            </div>
+
+            <!-- Seletor de Modo ATC: COM TORRE vs AUTO REDE vs COORDENAÇÃO LIVRE UNICOM -->
+            <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs">
+                <button onclick="setModoATC('ONLINE')" id="mode-online" class="px-2.5 py-1 rounded-md font-bold transition bg-emerald-600 text-white" title="Exibe o diálogo completo Piloto + Resposta da Torre">🗼 Com Torre</button>
+                <button onclick="setModoATC('AUTO')" id="mode-auto" class="px-2 py-1 rounded-md font-semibold transition text-slate-400 hover:text-white" title="Alterna sozinho conforme ATC online na rede">Auto</button>
+                <button onclick="setModoATC('UNICOM')" id="mode-unicom" class="px-2.5 py-1 rounded-md font-bold transition text-slate-400 hover:text-white" title="Coordenação Livre na UNICOM 122.800 com campos editáveis">📻 UNICOM 122.800</button>
+            </div>
+
+            <!-- Seletor de Rede Online -->
+            <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs">
+                <button onclick="setRede('IVAO')" id="net-ivao" class="px-2 py-1 rounded-md font-bold transition bg-slate-800 text-emerald-400 border border-emerald-500/30">IVAO</button>
+                <button onclick="setRede('VATSIM')" id="net-vatsim" class="px-2 py-1 rounded-md font-bold transition text-slate-400 hover:text-white">VATSIM</button>
+            </div>
+
+            <!-- Tradutor EXCLUSIVO DAS FALAS (PT-BR / INGLÊS ICAO) -->
+            <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-700 text-xs">
+                <button onclick="setIdiomaFalas('PT')" id="lang-pt" class="px-2.5 py-1 rounded-md font-bold flex items-center gap-1 transition bg-emerald-600 text-white">
+                    <span>🇧🇷 Falas: PT-BR</span>
+                </button>
+                <button onclick="setIdiomaFalas('EN')" id="lang-en" class="px-2.5 py-1 rounded-md font-bold flex items-center gap-1 transition text-slate-400 hover:text-white">
+                    <span>🇬🇧 Falas: Inglês ICAO</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. PAINEL DE ATC DISPONÍVEL EM TEMPO REAL (7 POSIÇÕES DA ROTA) -->
+    <section id="atc-available-panel" class="bg-slate-900/90 border-b border-slate-800 px-4 py-2 shrink-0 z-10">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between mb-1.5">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="radio" class="w-4 h-4 text-emerald-400"></i>
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Painel de Controle ATC Disponível na Rota (<span id="lbl-active-network">IVAO</span>)</span>
+                    <span class="text-[11px] text-slate-400 hidden md:inline">• Clique em qualquer cartão para ativar a posição ou alternar para UNICOM</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="limparCamposAtc()" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-md font-semibold flex items-center gap-1 transition" title="Deixa novamente em branco os campos de instrução do ATC/UNICOM">
+                        <i data-lucide="eraser" class="w-3 h-3"></i>
+                        <span>Limpar Campos em Branco</span>
+                    </button>
+                    <button onclick="verificarRedesOnline()" class="text-[11px] bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 px-2.5 py-0.5 rounded-md font-semibold flex items-center gap-1 transition">
+                        <i data-lucide="refresh-cw" class="w-3 h-3" id="icon-refresh-atc"></i>
+                        <span>Atualizar Radar ATC</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Grade de 7 Cartões de Controladores (DEL/GND, TWR Dep, APP Dep, CTR, APP Arr, TWR/GND Arr, UNICOM) -->
+            <div id="atc-cards-container" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                <!-- Preenchido via JS -->
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. PAINÉIS SEPARADOS: PROCEDIMENTOS DE SAÍDA (ORIGEM) E CHEGADA (DESTINO) -->
+    <section id="briefing-panel" class="bg-slate-900/95 border-b border-slate-800 px-4 py-2.5 shrink-0 transition-all z-10">
+        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3">
+            
+            <!-- CARTÃO A: PROCEDIMENTOS DE SAÍDA (ORIGEM) -->
+            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+                <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                            <i data-lucide="plane-takeoff" class="w-4 h-4"></i>
+                            Procedimentos de Saída (Origem)
+                        </h3>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="text-slate-400">Callsign:</span>
+                        <input type="text" id="inp-callsign" value="AZU5874" oninput="atualizarCampo('callsign', this.value)"
+                            class="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono font-bold text-white focus:outline-none focus:border-blue-500 uppercase text-center">
+                        <span class="text-slate-400">Tipo:</span>
+                        <select id="inp-rules" onchange="atualizarCampo('flightRules', this.value)"
+                            class="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono font-bold text-emerald-400 focus:outline-none cursor-pointer">
+                            <option value="IFR">IFR</option>
+                            <option value="VFR">VFR</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <!-- ICAO + Cidade Origem -->
+                    <div class="col-span-2 bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                        <label class="block text-[10px] text-slate-400 uppercase font-semibold mb-0.5">Origem (ICAO + Cidade / Aeroporto)</label>
+                        <div class="flex gap-1.5 items-center">
+                            <input type="text" id="inp-dep-icao" value="SBBE" oninput="atualizarIcaoManual('DEP', this.value)" placeholder="SBBE" maxlength="4"
+                                class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-blue-400 focus:outline-none uppercase text-center">
+                            <input type="text" id="inp-dep-name" value="BELÉM" oninput="atualizarCampo('depName', this.value)" placeholder="CIDADE"
+                                class="w-full bg-transparent font-sans font-bold text-slate-100 focus:outline-none uppercase">
+                        </div>
+                    </div>
+
+                    <!-- Posição / Gate Saída (Em branco por padrão) -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Posição / Gate Saída</label>
+                        <input type="text" id="inp-dep-gate" value="" oninput="atualizarCampo('depGate', this.value)" placeholder="(Em branco)"
+                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase">
+                    </div>
+
+                    <!-- Info ATIS Saída (Em branco por padrão) -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Info ATIS Saída</label>
+                        <select id="inp-dep-atis" onchange="atualizarCampo('depAtis', this.value)"
+                            class="w-full bg-slate-900 font-mono font-bold text-white focus:outline-none cursor-pointer">
+                            <option value="" selected>(Em branco)</option>
+                            <option value="Alpha">A - Alpha</option>
+                            <option value="Bravo">B - Bravo</option>
+                            <option value="Charlie">C - Charlie</option>
+                            <option value="Delta">D - Delta</option>
+                            <option value="Echo">E - Echo</option>
+                            <option value="Foxtrot">F - Foxtrot</option>
+                            <option value="Golf">G - Golf</option>
+                            <option value="Hotel">H - Hotel</option>
+                            <option value="India">I - India</option>
+                            <option value="Juliet">J - Juliet</option>
+                            <option value="Kilo">K - Kilo</option>
+                            <option value="Lima">L - Lima</option>
+                            <option value="Mike">M - Mike</option>
+                            <option value="November">N - November</option>
+                            <option value="Oscar">O - Oscar</option>
+                            <option value="Papa">P - Papa</option>
+                            <option value="Quebec">Q - Quebec</option>
+                            <option value="Romeo">R - Romeo</option>
+                            <option value="Sierra">S - Sierra</option>
+                            <option value="Tango">T - Tango</option>
+                            <option value="Uniform">U - Uniform</option>
+                            <option value="Victor">V - Victor</option>
+                            <option value="Whiskey">W - Whiskey</option>
+                            <option value="X-Ray">X - X-Ray</option>
+                            <option value="Yankee">Y - Yankee</option>
+                            <option value="Zulu">Z - Zulu</option>
+                        </select>
+                    </div>
+
+                    <!-- Pista em Uso & QNH Saída -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                        <label class="block text-[10px] text-slate-400 uppercase font-semibold mb-0.5">Pista Saída / QNH</label>
+                        <div class="flex items-center gap-1">
+                            <input type="text" id="inp-dep-rwy" value="07" oninput="atualizarCampo('depRwy', this.value)" placeholder="Rwy"
+                                class="w-1/2 bg-transparent font-mono font-bold text-emerald-400 focus:outline-none uppercase">
+                            <span class="text-slate-600">/</span>
+                            <input type="text" id="inp-dep-qnh" value="1013" oninput="atualizarCampo('depQnh', this.value)" placeholder="QNH"
+                                class="w-1/2 bg-transparent font-mono font-bold text-slate-200 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <!-- SID & Transição -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                        <label class="block text-[10px] text-slate-400 uppercase font-semibold mb-0.5">SID / Transição</label>
+                        <div class="flex items-center gap-1">
+                            <input type="text" id="inp-sid" value="VULA2A" oninput="atualizarCampo('sid', this.value)" placeholder="SID"
+                                class="w-1/2 bg-transparent font-mono font-bold text-white focus:outline-none uppercase">
+                            <span class="text-slate-600">/</span>
+                            <input type="text" id="inp-sid-trans" value="LEMIS" oninput="atualizarCampo('sidTrans', this.value)" placeholder="Trans"
+                                class="w-1/2 bg-transparent font-mono font-bold text-slate-300 focus:outline-none uppercase">
+                        </div>
+                    </div>
+
+                    <!-- Cauda Pushback (Usado na Torre e na UNICOM) -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Cauda Pushback</label>
+                        <input type="text" list="push-tail-list" id="inp-push-tail" value="" oninput="atualizarCampo('pushTailDir', this.value.toUpperCase())" placeholder="DIREITA/ESQUERDA"
+                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase">
+                    </div>
+
+                    <!-- Taxiways de Saída (Usado na Torre e na UNICOM!) -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Táxi Saída (Via)</label>
+                        <input type="text" id="inp-dep-taxiways" value="" oninput="atualizarCampo('depTaxiways', this.value.toUpperCase())" placeholder="Ex: A, B"
+                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase">
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARTÃO B: PROCEDIMENTOS DE CHEGADA (DESTINO) -->
+            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+                <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                            <i data-lucide="plane-landing" class="w-4 h-4"></i>
+                            Procedimentos de Chegada (Destino)
+                        </h3>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="text-slate-400">Nível Cruzeiro (FL):</span>
+                        <input type="text" id="inp-fl" value="290" oninput="atualizarCampo('cruiseFl', this.value)" placeholder="290"
+                            class="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono font-bold text-white focus:outline-none focus:border-emerald-500 text-center">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <!-- ICAO + Cidade Destino (Regra Nome da Cidade / Aeroporto+Cidade) -->
+                    <div class="col-span-2 bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                        <label class="block text-[10px] text-slate-400 uppercase font-semibold mb-0.5">Destino (ICAO + Cidade / Aeroporto)</label>
+                        <div class="flex gap-1.5 items-center">
+                            <input type="text" id="inp-arr-icao" value="SBPA" oninput="atualizarIcaoManual('ARR', this.value)" placeholder="SBPA" maxlength="4"
+                                class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-emerald-400 focus:outline-none uppercase text-center">
+                            <input type="text" id="inp-arr-name" value="PORTO ALEGRE" oninput="atualizarCampo('arrName', this.value)" placeholder="CIDADE"
+                                class="w-full bg-transparent font-sans font-bold text-slate-100 focus:outline-none uppercase">
+                        </div>
+                    </div>
+
+                    <!-- SELETOR DUPLO LADO A LADO: PROCEDIMENTO (ILS/RNAV/VOR/NDB) + LETRA DO PROCEDIMENTO -->
+                    <div class="col-span-2 bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Procedimento Chegada + Letra</label>
+                        <div class="flex items-center gap-1.5">
+                            <select id="inp-app-type" onchange="atualizarCampo('appType', this.value)"
+                                class="w-3/5 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 font-mono font-bold text-emerald-400 focus:outline-none cursor-pointer">
+                                <option value="ILS" selected>ILS</option>
+                                <option value="RNAV">RNAV</option>
+                                <option value="RNP">RNP</option>
+                                <option value="VOR">VOR</option>
+                                <option value="NDB">NDB</option>
+                                <option value="LOC">LOC</option>
+                                <option value="VISUAL">VISUAL</option>
+                            </select>
+                            <select id="inp-app-letter" onchange="atualizarCampo('appLetter', this.value)"
+                                class="w-2/5 bg-slate-950 border border-amber-500/50 rounded px-1.5 py-0.5 font-mono font-bold text-white focus:outline-none cursor-pointer" title="Letra do procedimento de aproximação">
+                                <option value="" selected>Letra (--)</option>
+                                <option value="Z">Z (Zulu)</option>
+                                <option value="Y">Y (Yankee)</option>
+                                <option value="X">X (X-Ray)</option>
+                                <option value="W">W (Whiskey)</option>
+                                <option value="U">U (Uniform)</option>
+                                <option value="V">V (Victor)</option>
+                                <option value="A">A (Alpha)</option>
+                                <option value="B">B (Bravo)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Pista Pouso & QNH Destino -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                        <label class="block text-[10px] text-slate-400 uppercase font-semibold mb-0.5">Pista Pouso / QNH</label>
+                        <div class="flex items-center gap-1">
+                            <input type="text" id="inp-arr-rwy" value="11" oninput="atualizarCampo('arrRwy', this.value)" placeholder="Rwy"
+                                class="w-1/2 bg-transparent font-mono font-bold text-emerald-400 focus:outline-none uppercase">
+                            <span class="text-slate-600">/</span>
+                            <input type="text" id="inp-arr-qnh" value="1020" oninput="atualizarCampo('arrQnh', this.value)" placeholder="QNH"
+                                class="w-1/2 bg-transparent font-mono font-bold text-slate-200 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Nível / Altitude de Descida (Para Torre e UNICOM!) -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Nível na Descida (FL)</label>
+                        <input type="text" id="inp-desc-fl" value="" oninput="atualizarCampo('assignedDescFl', this.value.toUpperCase())" placeholder="Ex: 100"
+                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase">
+                    </div>
+
+                    <!-- Táxi Após o Pouso (Via Taxiways) -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Táxi Após Pouso (Via)</label>
+                        <input type="text" id="inp-arr-taxiways" value="" oninput="atualizarCampo('arrTaxiways', this.value.toUpperCase())" placeholder="Ex: C, D"
+                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase">
+                    </div>
+
+                    <!-- Posição / Gate de Chegada (Em branco por padrão) -->
+                    <div class="bg-slate-900/90 p-2 rounded-lg border border-amber-500/40">
+                        <label class="block text-[10px] text-amber-300 uppercase font-semibold mb-0.5">Posição / Gate Chegada</label>
+                        <input type="text" id="inp-arr-gate" value="" oninput="atualizarCampo('arrGate', this.value.toUpperCase())" placeholder="(Em branco)"
+                            class="w-full bg-transparent font-mono font-bold text-white placeholder-slate-600 focus:outline-none uppercase">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- 5. ÁREA PRINCIPAL: MENU LATERAL DE FASES + TIMELINE DE DIÁLOGO (PILOTO + TORRE OU UNICOM INTERATIVA) -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Sidebar de Navegação de Fases -->
+        <aside class="w-60 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 hidden md:flex">
+            <div class="p-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                <span>Fases da Operação</span>
+                <span class="text-[10px] text-blue-400 font-mono">7 Etapas</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-1" id="sidebar-phases">
+                <!-- Preenchido via JS -->
+            </div>
+            <div class="p-3 border-t border-slate-800 bg-slate-950/70 text-[11px] text-slate-400 space-y-1.5">
+                <div class="flex items-center gap-1.5 text-amber-300 font-bold">
+                    <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                    <span>Edição em Tempo Real:</span>
+                </div>
+                <p>Tanto no modo <strong>Com Torre</strong> quanto na <strong>UNICOM 122.800</strong>, preencha os campos em branco à esquerda (táxi, nível de descida, pista livre e gate) para completar suas falas!</p>
+            </div>
+        </aside>
+
+        <!-- Barra de Fases Mobile -->
+        <div class="md:hidden bg-slate-900 border-b border-slate-800 p-2 flex gap-1.5 overflow-x-auto shrink-0" id="mobile-phases"></div>
+
+        <!-- Área Central do Chat / Diálogos -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-950" id="chat-scroll-container">
+            <div class="max-w-5xl mx-auto space-y-8 pb-16" id="dialogue-container">
+                <!-- Os diálogos são renderizados dinamicamente aqui -->
+            </div>
+        </main>
+
+    </div>
+
+    <!-- Notificação Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-600 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-semibold flex items-center gap-2.5 z-50">
+        <i data-lucide="check-circle" id="toast-icon" class="w-4 h-4 text-emerald-400"></i>
+        <span id="toast-text">Operação realizada</span>
+    </div>
+
+    <script>
+        // ============================================================================
+        // BASE DE DADOS DE CIDADES E EXCEÇÃO DE MÚLTIPLOS AEROPORTOS POR CIDADE
+        // ============================================================================
+        // Regra Obrigatória:
+        // 1. Sempre usar o NOME DA CIDADE em letras maiúsculas (e nunca o nome de batismo do aeroporto sozinho).
+        // 2. Exceção Obrigatória: Cidades que possuem 2 ou mais aeroportos comerciais
+        //    (São Paulo, Rio de Janeiro, Belo Horizonte, Londres, Paris, Nova York, Buenos Aires, Milão, Tóquio)
+        //    devem falar "NOME DO AEROPORTO, CIDADE".
+        const airportLocationDatabase = {
+            // Cidades Brasileiras com 2 ou mais aeroportos (Aeroporto, Cidade)
+            'SBGR': { label: 'GUARULHOS, SÃO PAULO', radioName: 'Guarulhos' },
+            'SBSP': { label: 'CONGONHAS, SÃO PAULO', radioName: 'Congonhas' },
+            'SBMT': { label: 'CAMPO DE MARTE, SÃO PAULO', radioName: 'Marte' },
+            'SBKP': { label: 'VIRACOPOS, CAMPINAS', radioName: 'Campinas' },
+            'SBGL': { label: 'GALEÃO, RIO DE JANEIRO', radioName: 'Galeão' },
+            'SBRJ': { label: 'SANTOS DUMONT, RIO DE JANEIRO', radioName: 'Rio' },
+            'SBJR': { label: 'JACAREPAGUÁ, RIO DE JANEIRO', radioName: 'Jacarepaguá' },
+            'SBCF': { label: 'CONFINS, BELO HORIZONTE', radioName: 'Confins' },
+            'SBBH': { label: 'PAMPULHA, BELO HORIZONTE', radioName: 'Pampulha' },
+
+            // Cidades Brasileiras com 1 aeroporto principal (SOMENTE NOME DA CIDADE)
+            'SBBE': { label: 'BELÉM', radioName: 'Belém' },
+            'SBPA': { label: 'PORTO ALEGRE', radioName: 'Porto Alegre' },
+            'SBBR': { label: 'BRASÍLIA', radioName: 'Brasília' },
+            'SBCT': { label: 'CURITIBA', radioName: 'Curitiba' },
+            'SBFL': { label: 'FLORIANÓPOLIS', radioName: 'Florianópolis' },
+            'SBSV': { label: 'SALVADOR', radioName: 'Salvador' },
+            'SBRF': { label: 'RECIFE', radioName: 'Recife' },
+            'SBFZ': { label: 'FORTALEZA', radioName: 'Fortaleza' },
+            'SBEG': { label: 'MANAUS', radioName: 'Manaus' },
+            'SBCY': { label: 'CUIABÁ', radioName: 'Cuiabá' },
+            'SBGO': { label: 'GOIÂNIA', radioName: 'Goiânia' },
+            'SBVT': { label: 'VITÓRIA', radioName: 'Vitória' },
+            'SBMO': { label: 'MACEIÓ', radioName: 'Maceió' },
+            'SBNT': { label: 'NATAL', radioName: 'Natal' },
+            'SBSG': { label: 'NATAL', radioName: 'Natal' },
+            'SBFI': { label: 'FOZ DO IGUAÇU', radioName: 'Foz' },
+            'SBLO': { label: 'LONDRINA', radioName: 'Londrina' },
+            'SBMG': { label: 'MARINGÁ', radioName: 'Maringá' },
+            'SBJV': { label: 'JOINVILLE', radioName: 'Joinville' },
+            'SBNF': { label: 'NAVEGANTES', radioName: 'Navegantes' },
+            'SBJP': { label: 'JOÃO PESSOA', radioName: 'João Pessoa' },
+            'SBAR': { label: 'ARACAJU', radioName: 'Aracaju' },
+            'SBSL': { label: 'SÃO LUÍS', radioName: 'São Luís' },
+            'SBTE': { label: 'TERESINA', radioName: 'Teresina' },
+            'SBCG': { label: 'CAMPO GRANDE', radioName: 'Campo Grande' },
+            'SBPV': { label: 'PORTO VELHO', radioName: 'Porto Velho' },
+            'SBRB': { label: 'RIO BRANCO', radioName: 'Rio Branco' },
+            'SBMQ': { label: 'MACAPÁ', radioName: 'Macapá' },
+            'SBBV': { label: 'BOA VISTA', radioName: 'Boa Vista' },
+            'SBPJ': { label: 'PALMAS', radioName: 'Palmas' },
+            'SBUL': { label: 'UBERLÂNDIA', radioName: 'Uberlândia' },
+            'SBRP': { label: 'RIBEIRÃO PRETO', radioName: 'Ribeirão' },
+            'SBSR': { label: 'SÃO JOSÉ DO RIO PRETO', radioName: 'Rio Preto' },
+            'SBPS': { label: 'PORTO SEGURO', radioName: 'Porto Seguro' },
+            'SBIL': { label: 'ILHÉUS', radioName: 'Ilhéus' },
+            'SBCX': { label: 'CAXIAS DO SUL', radioName: 'Caxias' },
+            'SBCH': { label: 'CHAPECÓ', radioName: 'ChapecÓ' },
+            'SBPK': { label: 'PELOTAS', radioName: 'Pelotas' },
+            'SBSM': { label: 'SANTA MARIA', radioName: 'Santa Maria' },
+            'SBSN': { label: 'SANTARÉM', radioName: 'Santarém' },
+            'SBMA': { label: 'MARABÁ', radioName: 'Marabá' },
+
+            // Internacionais com múltiplos aeroportos (Aeroporto, Cidade)
+            'SABE': { label: 'AEROPARQUE, BUENOS AIRES', radioName: 'Aeroparque' },
+            'SAEZ': { label: 'EZEIZA, BUENOS AIRES', radioName: 'Ezeiza' },
+            'LFPG': { label: 'CHARLES DE GAULLE, PARIS', radioName: 'De Gaulle' },
+            'LFPO': { label: 'ORLY, PARIS', radioName: 'Orly' },
+            'EGLL': { label: 'HEATHROW, LONDRES', radioName: 'Heathrow' },
+            'EGKK': { label: 'GATWICK, LONDRES', radioName: 'Gatwick' },
+            'EGLC': { label: 'CITY, LONDRES', radioName: 'London' },
+            'KJFK': { label: 'JFK, NOVA YORK', radioName: 'Kennedy' },
+            'KLGA': { label: 'LAGUARDIA, NOVA YORK', radioName: 'LaGuardia' },
+            'KEWR': { label: 'NEWARK, NOVA YORK', radioName: 'Newark' },
+            'LIMC': { label: 'MALPENSA, MILÃO', radioName: 'Malpensa' },
+            'LIML': { label: 'LINATE, MILÃO', radioName: 'Linate' },
+            'RJTT': { label: 'HANEDA, TÓQUIO', radioName: 'Haneda' },
+            'RJAA': { label: 'NARITA, TÓQUIO', radioName: 'Narita' },
+
+            // Internacionais com 1 aeroporto principal (SOMENTE NOME DA CIDADE)
+            'LPPT': { label: 'LISBOA', radioName: 'Lisboa' },
+            'LPPR': { label: 'PORTO', radioName: 'Porto' },
+            'LPFR': { label: 'FARO', radioName: 'Faro' },
+            'LPMA': { label: 'MADEIRA', radioName: 'Madeira' },
+            'LFLL': { label: 'LYON', radioName: 'Lyon' },
+            'LEMD': { label: 'MADRID', radioName: 'Madrid' },
+            'LEBL': { label: 'BARCELONA', radioName: 'Barcelona' },
+            'EDDF': { label: 'FRANKFURT', radioName: 'Frankfurt' },
+            'EHAM': { label: 'AMSTERDAM', radioName: 'Schiphol' },
+            'LIRF': { label: 'ROMA', radioName: 'Fiumicino' },
+            'KMIA': { label: 'MIAMI', radioName: 'Miami' },
+            'KMCO': { label: 'ORLANDO', radioName: 'Orlando' },
+            'SCEL': { label: 'SANTIAGO', radioName: 'Santiago' },
+            'SUMU': { label: 'MONTEVIDÉU', radioName: 'Carrasco' },
+            'SGAS': { label: 'ASSUNÇÃO', radioName: 'Assunção' },
+            'SPJC': { label: 'LIMA', radioName: 'Lima' },
+            'SKBO': { label: 'BOGOTÁ', radioName: 'Bogotá' }
+        };
+
+        function resolverNomeCidadeOuAeroporto(icao, simbriefRawName = '') {
+            const code = (icao || '').toUpperCase().trim();
+            if (airportLocationDatabase[code]) {
+                return airportLocationDatabase[code];
+            }
+            if (simbriefRawName) {
+                const limpo = simbriefRawName
+                    .replace(/\b(INTL|INTERNATIONAL|AIRPORT|AEROPORTO|INTERNACIONAL)\b/gi, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                if (limpo) {
+                    return { label: limpo.toUpperCase(), radioName: limpo };
+                }
+            }
+            return { label: code || 'CIDADE', radioName: code || 'Local' };
+        }
+
+        // ============================================================================
+        // ESTADO GLOBAL DO SISTEMA (CAMPOS DE INSTRUÇÃO EM BRANCO POR PADRÃO!)
+        // ============================================================================
+        const state = {
+            // Preferências do Sistema
+            speechLang: 'PT',         // 'PT' (Português) ou 'EN' (Inglês ICAO) - Traduz apenas as falas!
+            network: 'IVAO',          // 'IVAO' ou 'VATSIM'
+            atcMode: 'ONLINE',        // 'ONLINE' (Mostra Torre+Piloto), 'AUTO' (Auto Rede), 'UNICOM' (122.800)
+            selectedPhase: 'ALL',     // 'ALL' ou fase específica
+            variationIndex: 0,        // 0, 1 ou 2
+            briefingOpen: true,
+            atcPanelOpen: true,
+            demoRouteIndex: 0,
+
+            // Dados do Plano de Voo (SimBrief + Painéis Separados de Saída e Chegada)
+            callsign: 'AZU5874',
+            aircraft: 'A320',
+            flightRules: 'IFR',
+
+            // Saída (Origem)
+            depIcao: 'SBBE',
+            depName: 'BELÉM',
+            depRadioName: 'Belém',
+            depGate: '',              // EM BRANCO para o piloto informar
+            depAtis: '',              // EM BRANCO para o piloto informar
+            depRwy: '07',
+            depQnh: '1013',
+            depWindDir: '120',
+            depWindSpd: '06',
+            sid: 'VULA2A',
+            sidTrans: 'LEMIS',
+
+            // Chegada (Destino)
+            arrIcao: 'SBPA',
+            arrName: 'PORTO ALEGRE',
+            arrRadioName: 'Porto Alegre',
+            cruiseFl: '290',
+            appType: 'ILS',           // Select: ILS, RNAV, RNP, VOR, NDB, LOC, VISUAL
+            appLetter: '',            // EM BRANCO por padrão (Letra Z, Y, X, W...)
+            arrRwy: '11',
+            arrQnh: '1020',
+            arrWindDir: '120',
+            arrWindSpd: '04',
+            arrGate: '',              // EM BRANCO por padrão
+            arrAtis: '',
+
+            // CAMPOS QUE O ATC ENVIA OU QUE O PILOTO PREENCHE NA UNICOM (TODOS EM BRANCO POR PADRÃO!)
+            squawk: '',               // Transponder em branco
+            pushTailDir: '',          // Cauda (DIREITA/ESQUERDA) em branco
+            depTaxiways: '',          // Taxiways de saída em branco
+            takeoffMin: '20',
+            passingAlt: '',           // Altitude cruzando na subida em branco
+            climbRestriction: '',     // Restrição de subida em branco
+            assignedClimbFl: '',      // Nível de subida em branco
+            assignedDescFl: '',       // Nível de descida em branco
+            vacatedTaxiway: '',       // Taxiway pela qual livrou a pista no pouso (em branco)
+            arrTaxiways: '',          // Taxiways até o estacionamento após o pouso (em branco)
+
+            // Controladores detectados online na rede
+            onlineDepGnd: null,
+            onlineDepAtc: null,
+            onlineAppAtc: null,
+            onlineCtrAtc: null,
+            onlineArrApp: null,
+            onlineArrAtc: null,
+            detectedControllers: []
+        };
+
+        const flightPhases = [
+            { id: 'ALL', name: 'Ver Todas as Fases (Sequência)', icon: 'list-ordered' },
+            { id: 'autorizacao', name: '1. Autorizando o Plano de Voo', icon: 'file-check' },
+            { id: 'push_taxi', name: '2. Pushback, Acionamento e Táxi', icon: 'truck' },
+            { id: 'decolagem', name: '3. Decolagem', icon: 'plane-takeoff' },
+            { id: 'subida', name: '4. Em Subida', icon: 'trending-up' },
+            { id: 'aproximacao', name: '5. Em Aproximação / Descida', icon: 'compass' },
+            { id: 'pousando', name: '6. Pousando (Final e Pista Livre)', icon: 'plane-landing' },
+            { id: 'taxi_chegada', name: '7. Táxi para o Estacionamento', icon: 'parking-square' }
+        ];
+
+        const speechStyleNames = [
+            'Estilo 1/5: Comercial Fluido (Azul / LATAM)',
+            'Estilo 2/5: Comandante Veterano (Direto)',
+            'Estilo 3/5: Copiloto Linha Aérea (Cortês)',
+            'Estilo 4/5: Ponte Aérea / Rush (Ágil)',
+            'Estilo 5/5: Padrão Estrito DECEA (ICA 100-12)'
+        ];
+
+        // Converte o Callsign ICAO (AZU5874, TAM3418, GLO1022) para a fonia real ("Azul 5874", "Latam 3418")
+        function obterCallsignFonia(rawCallsign) {
+            const raw = (rawCallsign || '').trim().toUpperCase();
+            if (!raw) return '';
+            const airlineTelephony = {
+                'AZU': 'Azul',
+                'TAM': 'Latam',
+                'LAN': 'Latam',
+                'LTM': 'Latam',
+                'DSM': 'Latam',
+                'LAP': 'Paraguai',
+                'GLO': 'Gol',
+                'PTB': 'Passaredo',
+                'PAM': 'Map',
+                'SID': 'Sideral',
+                'TTL': 'Total',
+                'AZG': 'Total',
+                'ABJ': 'Abaeté',
+                'SUR': 'Sul América',
+                'TAP': 'Air Portugal',
+                'AFR': 'Air France',
+                'BAW': 'Speedbird',
+                'DLH': 'Lufthansa',
+                'KLM': 'KLM',
+                'IBE': 'Iberia',
+                'AEA': 'Air Europa',
+                'AAL': 'American',
+                'UAL': 'United',
+                'DAL': 'Delta',
+                'ARG': 'Argentina',
+                'CMP': 'Copa',
+                'AVA': 'Avianca'
+            };
+            const match = raw.match(/^([A-Z]{3})(\d+[A-Z]*)$/);
+            if (match && airlineTelephony[match[1]]) {
+                return `${airlineTelephony[match[1]]} ${match[2]}`;
+            }
+            return raw;
+        }
+
+        function fmtCs(darkBg = true) {
+            const raw = (state.callsign || '').trim();
+            if (!raw) return fmt('', 'inp-callsign', darkBg);
+            const falado = obterCallsignFonia(raw);
+            const cls = darkBg ? 'filled-badge' : 'atc-filled-badge';
+            return `<span class="${cls}" title="Callsign no plano: ${raw}">${falado}</span>`;
+        }
+
+        // ============================================================================
+        // INICIALIZAÇÃO E SAUDAÇÃO EM LETRA MAIÚSCULA
+        // ============================================================================
+        function init() {
+            lucide.createIcons();
+            iniciarRelogio();
+            verificarSimBriefSalvo();
+            sincronizarInputsComState();
+            renderizarMenuFases();
+            renderizarPainelAtc();
+            renderizarDialogos();
+            verificarRedesOnline();
+        }
+
+        function iniciarRelogio() {
+            const atualizar = () => {
+                const agora = new Date();
+                const utcH = String(agora.getUTCHours()).padStart(2, '0');
+                const utcM = String(agora.getUTCMinutes()).padStart(2, '0');
+                const locH = String(agora.getHours()).padStart(2, '0');
+                const locM = String(agora.getMinutes()).padStart(2, '0');
+
+                document.getElementById('utc-clock').innerText = `${utcH}:${utcM} ZULU`;
+                document.getElementById('local-clock').innerText = `${locH}:${locM} LOC`;
+                // EXIBE ESTRITAMENTE EM LETRA MAIÚSCULA NO TOPO DIREITO
+                document.getElementById('greeting-preview').innerText = obterSaudacao('PT').toUpperCase();
+            };
+            atualizar();
+            setInterval(atualizar, 10000);
+        }
+
+        function obterSaudacao(lang) {
+            const horaLocal = new Date().getHours();
+            if (lang === 'EN') {
+                if (horaLocal >= 5 && horaLocal < 12) return 'good morning';
+                if (horaLocal >= 12 && horaLocal < 18) return 'good afternoon';
+                return 'good evening';
+            } else {
+                if (horaLocal >= 5 && horaLocal < 12) return 'bom dia';
+                if (horaLocal >= 12 && horaLocal < 18) return 'boa tarde';
+                return 'boa noite';
+            }
+        }
+
+        // ============================================================================
+        // SALVAMENTO AUTOMÁTICO DO SIMBRIEF NO NAVEGADOR (1 CLIQUE) + VOO DEMO
+        // ============================================================================
+        function verificarSimBriefSalvo() {
+            const savedId = localStorage.getItem('smart_atc_simbrief_user');
+            const inputGroup = document.getElementById('simbrief-input-group');
+            const savedGroup = document.getElementById('simbrief-saved-group');
+            const badge = document.getElementById('saved-simbrief-badge');
+            const input = document.getElementById('simbrief-user-input');
+
+            if (savedId && savedId.trim() !== '') {
+                input.value = savedId;
+                badge.innerText = savedId;
+                inputGroup.classList.add('hidden');
+                savedGroup.classList.remove('hidden');
+                savedGroup.classList.add('flex');
+            } else {
+                inputGroup.classList.remove('hidden');
+                savedGroup.classList.add('hidden');
+                savedGroup.classList.remove('flex');
+            }
+        }
+
+        function salvarECarregarSimBrief() {
+            const val = document.getElementById('simbrief-user-input').value.trim();
+            if (!val) {
+                mostrarToast('Digite seu Nome de Usuário ou Pilot ID do SimBrief!', 'error');
+                return;
+            }
+            localStorage.setItem('smart_atc_simbrief_user', val);
+            verificarSimBriefSalvo();
+            buscarDadosSimBrief(val);
+        }
+
+        function carregarSimBriefSalvo() {
+            const savedId = localStorage.getItem('smart_atc_simbrief_user');
+            if (!savedId) {
+                editarSimBriefId();
+                return;
+            }
+            buscarDadosSimBrief(savedId);
+        }
+
+        function editarSimBriefId() {
+            const savedId = localStorage.getItem('smart_atc_simbrief_user') || '';
+            document.getElementById('simbrief-user-input').value = savedId;
+            document.getElementById('simbrief-saved-group').classList.add('hidden');
+            document.getElementById('simbrief-saved-group').classList.remove('flex');
+            document.getElementById('simbrief-input-group').classList.remove('hidden');
+            document.getElementById('simbrief-user-input').focus();
+        }
+
+        function carregarVooDemonstracao() {
+            const demos = [
+                {
+                    callsign: 'AZU5874', depIcao: 'SBBE', arrIcao: 'SBPA',
+                    depRwy: '07', arrRwy: '11', depQnh: '1013', arrQnh: '1020',
+                    sid: 'VULA2A', sidTrans: 'LEMIS', cruiseFl: '290', appType: 'ILS'
+                },
+                {
+                    callsign: 'GLO1022', depIcao: 'SBGR', arrIcao: 'SBRJ',
+                    depRwy: '10L', arrRwy: '02R', depQnh: '1018', arrQnh: '1016',
+                    sid: 'BCO1A', sidTrans: 'PCX', cruiseFl: '270', appType: 'RNAV'
+                },
+                {
+                    callsign: 'TAM3418', depIcao: 'SBCF', arrIcao: 'SBSP',
+                    depRwy: '16', arrRwy: '17R', depQnh: '1019', arrQnh: '1017',
+                    sid: 'CONF2A', sidTrans: 'imosi', cruiseFl: '280', appType: 'ILS'
+                },
+                {
+                    callsign: 'TAP082', depIcao: 'LPPT', arrIcao: 'SBGL',
+                    depRwy: '02', arrRwy: '15', depQnh: '1015', arrQnh: '1014',
+                    sid: 'IXID1N', sidTrans: 'GANSU', cruiseFl: '360', appType: 'ILS'
+                }
+            ];
+            state.demoRouteIndex = (state.demoRouteIndex + 1) % demos.length;
+            const d = demos[state.demoRouteIndex];
+
+            state.callsign = d.callsign;
+            state.depIcao = d.depIcao;
+            const depLoc = resolverNomeCidadeOuAeroporto(d.depIcao);
+            state.depName = depLoc.label;
+            state.depRadioName = depLoc.radioName;
+            state.depRwy = d.depRwy;
+            state.depQnh = d.depQnh;
+            state.sid = d.sid;
+            state.sidTrans = d.sidTrans.toUpperCase();
+
+            state.arrIcao = d.arrIcao;
+            const arrLoc = resolverNomeCidadeOuAeroporto(d.arrIcao);
+            state.arrName = arrLoc.label;
+            state.arrRadioName = arrLoc.radioName;
+            state.arrRwy = d.arrRwy;
+            state.arrQnh = d.arrQnh;
+            state.cruiseFl = d.cruiseFl;
+            state.appType = d.appType;
+
+            limparCamposAtc(false);
+            sincronizarInputsComState();
+            renderizarPainelAtc();
+            renderizarDialogos();
+            mostrarToast(`Rota Demo carregada: ${state.callsign} (${state.depName} ➔ ${state.arrName})`, 'success');
+        }
+
+        // ============================================================================
+        // INTEGRAÇÃO COM SIMBRIEF (APLICANDO REGRA DE CIDADE E CAMPOS ATC EM BRANCO)
+        // ============================================================================
+        async function buscarDadosSimBrief(identificador) {
+            const btnLabel = document.getElementById('btn-simbrief-label');
+            if (btnLabel) btnLabel.innerText = 'Buscando SimBrief...';
+
+            try {
+                const isNumeric = /^\d+$/.test(identificador);
+                const param = isNumeric ? `userid=${encodeURIComponent(identificador)}` : `username=${encodeURIComponent(identificador)}`;
+                const url = `https://www.simbrief.com/api/xml.fetcher.php?${param}&json=1`;
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Falha ao conectar ao SimBrief');
+                const data = await response.json();
+
+                if (data.fetch && data.fetch.status && data.fetch.status.startsWith('Error')) {
+                    throw new Error(data.fetch.status);
+                }
+
+                // 1. Callsign e Regras
+                state.callsign = data.atc?.callsign || ((data.general?.icao_airline || '') + (data.general?.flight_number || '')) || state.callsign;
+                state.aircraft = data.aircraft?.icao_code || state.aircraft;
+                state.flightRules = (data.atc?.flightplan_text?.includes(' V ') ? 'VFR' : 'IFR');
+
+                // 2. Origem e Destino -> APLICA REGRA DE NOME DA CIDADE (E EXCEÇÃO DE MÚLTIPLOS AEROPORTOS)
+                state.depIcao = (data.origin?.icao_code || state.depIcao).toUpperCase();
+                const depLoc = resolverNomeCidadeOuAeroporto(state.depIcao, data.origin?.name);
+                state.depName = depLoc.label;
+                state.depRadioName = depLoc.radioName;
+                state.depRwy = data.origin?.plan_rwy || state.depRwy;
+
+                state.arrIcao = (data.destination?.icao_code || state.arrIcao).toUpperCase();
+                const arrLoc = resolverNomeCidadeOuAeroporto(state.arrIcao, data.destination?.name);
+                state.arrName = arrLoc.label;
+                state.arrRadioName = arrLoc.radioName;
+                state.arrRwy = data.destination?.plan_rwy || state.arrRwy;
+
+                // 3. Nível de Voo (FL)
+                const rawAlt = parseInt(data.general?.initial_altitude || '29000', 10);
+                state.cruiseFl = rawAlt >= 1000 ? String(Math.round(rawAlt / 100)).padStart(3, '0') : String(rawAlt);
+
+                // 4. Extrair SID e Transição da Rota do SimBrief
+                const routeStr = (data.general?.route || '').trim();
+                if (routeStr) {
+                    const parts = routeStr.split(/\s+/);
+                    if (parts.length > 0 && parts[0].length >= 4 && /\d/.test(parts[0])) {
+                        state.sid = parts[0].replace(/\/.*$/, '');
+                        if (parts.length > 1 && /^[A-Z]{5}$/.test(parts[1])) {
+                            state.sidTrans = parts[1];
+                        }
+                    }
+                }
+
+                // 5. Extrair QNH e Vento do METAR
+                extrairDadosMetar(data.weather?.orig_metar || '', 'DEP');
+                extrairDadosMetar(data.weather?.dest_metar || '', 'ARR');
+
+                // 6. Manter em branco os campos que o ATC passa durante o voo!
+                limparCamposAtc(false);
+
+                sincronizarInputsComState();
+                renderizarDialogos();
+                verificarRedesOnline();
+                mostrarToast(`SimBrief carregado: ${state.callsign} (${state.depName} ➔ ${state.arrName})`, 'success');
+            } catch (err) {
+                console.error(err);
+                mostrarToast('Plano não encontrado para este ID no SimBrief. Teste também o botão Rota Demo!', 'error');
+            } finally {
+                if (btnLabel) btnLabel.innerText = '📥 Carregar Dados do SimBrief';
+            }
+        }
+
+        function extrairDadosMetar(metar, tipo) {
+            if (!metar) return;
+            const qnhMatch = metar.match(/Q(\d{4})/);
+            if (qnhMatch) {
+                if (tipo === 'DEP') state.depQnh = qnhMatch[1];
+                else state.arrQnh = qnhMatch[1];
+            }
+            const windMatch = metar.match(/\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b/);
+            if (windMatch) {
+                const dir = windMatch[1] === 'VRB' ? 'variável' : windMatch[1];
+                const spd = windMatch[2];
+                if (tipo === 'DEP') {
+                    state.depWindDir = dir;
+                    state.depWindSpd = spd;
+                } else {
+                    state.arrWindDir = dir;
+                    state.arrWindSpd = spd;
+                }
+            }
+        }
+
+        function limparCamposAtc(mostrarAviso = true) {
+            state.depGate = '';
+            state.depAtis = '';
+            state.squawk = '';
+            state.pushTailDir = '';
+            state.depTaxiways = '';
+            state.passingAlt = '';
+            state.climbRestriction = '';
+            state.assignedClimbFl = '';
+            state.assignedDescFl = '';
+            state.vacatedTaxiway = '';
+            state.arrTaxiways = '';
+            state.arrGate = '';
+            state.appLetter = '';
+
+            sincronizarInputsComState();
+            renderizarDialogos();
+            if (mostrarAviso) {
+                mostrarToast('Campos operacionais e do ATC limpos (em branco para preenchimento).', 'info');
+            }
+        }
+
+        // ============================================================================
+        // PAINEL DE ATC DISPONÍVEL EM TEMPO REAL (IVAO & VATSIM - 7 POSIÇÕES)
+        // ============================================================================
+        async function verificarRedesOnline() {
+            state.onlineDepGnd = null;
+            state.onlineDepAtc = null;
+            state.onlineAppAtc = null;
+            state.onlineCtrAtc = null;
+            state.onlineArrApp = null;
+            state.onlineArrAtc = null;
+            state.detectedControllers = [];
+
+            document.getElementById('lbl-active-network').innerText = state.network;
+            const iconRefresh = document.getElementById('icon-refresh-atc');
+            if (iconRefresh) iconRefresh.classList.add('animate-spin');
+
+            try {
+                if (state.network === 'VATSIM') {
+                    const res = await fetch('https://data.vatsim.net/v3/vatsim-data.json');
+                    if (res.ok) {
+                        const data = await res.json();
+                        buscarControladoresNaLista(data.controllers || []);
+                    }
+                } else {
+                    let atcs = [];
+                    try {
+                        const resDirect = await fetch('https://api.ivao.aero/v2/tracker/whazzup');
+                        if (resDirect.ok) {
+                            const d = await resDirect.json();
+                            atcs = d.clients?.atcs || [];
+                        }
+                    } catch (e) {
+                        const proxyUrl = encodeURIComponent('https://api.ivao.aero/v2/tracker/whazzup');
+                        const resProxy = await fetch(`https://api.allorigins.win/get?url=${proxyUrl}`);
+                        if (resProxy.ok) {
+                            const p = await resProxy.json();
+                            const d = JSON.parse(p.contents);
+                            atcs = d.clients?.atcs || [];
+                        }
+                    }
+                    buscarControladoresNaLista(atcs);
+                }
+            } catch (err) {
+                console.warn('Aviso ao consultar rede:', err);
+            } finally {
+                if (iconRefresh) iconRefresh.classList.remove('animate-spin');
+            }
+
+            renderizarPainelAtc();
+            renderizarDialogos();
+        }
+
+        function buscarControladoresNaLista(lista) {
+            const normalizar = (c) => {
+                const cs = (c.callsign || '').toUpperCase();
+                const freq = c.frequency || c.lastTrack?.frequency || c.atcSession?.frequency || '118.700';
+                return { callsign: cs, freq: String(freq) };
+            };
+
+            const depPrefix = state.depIcao.toUpperCase();
+            const arrPrefix = state.arrIcao.toUpperCase();
+            const firDep = depPrefix.substring(0, 2);
+            const firArr = arrPrefix.substring(0, 2);
+
+            const validos = lista.map(normalizar).filter(c => !c.callsign.includes('ATIS') && !c.callsign.includes('OBS'));
+
+            state.detectedControllers = validos.filter(c =>
+                c.callsign.startsWith(depPrefix) ||
+                c.callsign.startsWith(arrPrefix) ||
+                (c.callsign.endsWith('_CTR') && (c.callsign.startsWith(firDep) || c.callsign.startsWith(firArr)))
+            );
+
+            state.onlineDepGnd = validos.find(c => c.callsign.startsWith(depPrefix) && (c.callsign.includes('DEL') || c.callsign.includes('GND')));
+            state.onlineDepAtc = validos.find(c => c.callsign.startsWith(depPrefix) && (c.callsign.includes('TWR') || c.callsign.includes('GND') || c.callsign.includes('DEL')));
+            state.onlineAppAtc = validos.find(c => c.callsign.startsWith(depPrefix) && c.callsign.includes('APP'));
+            state.onlineCtrAtc = validos.find(c => c.callsign.endsWith('_CTR') && (c.callsign.startsWith(firDep) || c.callsign.startsWith(firArr)));
+            state.onlineArrApp = validos.find(c => c.callsign.startsWith(arrPrefix) && c.callsign.includes('APP'));
+            state.onlineArrAtc = validos.find(c => c.callsign.startsWith(arrPrefix) && (c.callsign.includes('TWR') || c.callsign.includes('GND')));
+        }
+
+        function renderizarPainelAtc() {
+            const container = document.getElementById('atc-cards-container');
+            const badgeCount = document.getElementById('online-atc-count-badge');
+            if (!container) return;
+
+            const totalOnline = [
+                state.onlineDepGnd,
+                state.onlineDepAtc,
+                state.onlineAppAtc,
+                state.onlineCtrAtc,
+                state.onlineArrApp,
+                state.onlineArrAtc
+            ].filter(Boolean).length;
+
+            badgeCount.innerText = `${totalOnline} online`;
+            badgeCount.className = totalOnline > 0
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded-full text-[10px] font-mono'
+                : 'bg-slate-800 text-slate-400 border border-slate-700 px-1.5 py-0.2 rounded-full text-[10px] font-mono';
+
+            const slots = [
+                {
+                    role: 'DEL / GND ORIGEM',
+                    station: `Solo ${state.depRadioName}`,
+                    callsign: state.onlineDepGnd ? state.onlineDepGnd.callsign : `${state.depIcao}_GND`,
+                    freq: state.onlineDepGnd ? state.onlineDepGnd.freq : '121.900',
+                    online: !!state.onlineDepGnd,
+                    phaseJump: 'autorizacao'
+                },
+                {
+                    role: 'TORRE ORIGEM',
+                    station: `Torre ${state.depRadioName}`,
+                    callsign: state.onlineDepAtc ? state.onlineDepAtc.callsign : `${state.depIcao}_TWR`,
+                    freq: state.onlineDepAtc ? state.onlineDepAtc.freq : '118.700',
+                    online: !!state.onlineDepAtc,
+                    phaseJump: 'decolagem'
+                },
+                {
+                    role: 'CONTROLE SAÍDA',
+                    station: `Controle ${state.depRadioName}`,
+                    callsign: state.onlineAppAtc ? state.onlineAppAtc.callsign : `${state.depIcao}_APP`,
+                    freq: state.onlineAppAtc ? state.onlineAppAtc.freq : '120.450',
+                    online: !!state.onlineAppAtc,
+                    phaseJump: 'subida'
+                },
+                {
+                    role: 'CENTRO EM ROTA',
+                    station: 'Centro Radar',
+                    callsign: state.onlineCtrAtc ? state.onlineCtrAtc.callsign : `${state.depIcao.substring(0,2)}BS_CTR`,
+                    freq: state.onlineCtrAtc ? state.onlineCtrAtc.freq : '125.200',
+                    online: !!state.onlineCtrAtc,
+                    phaseJump: 'subida'
+                },
+                {
+                    role: 'CONTROLE CHEGADA',
+                    station: `Controle ${state.arrRadioName}`,
+                    callsign: state.onlineArrApp ? state.onlineArrApp.callsign : `${state.arrIcao}_APP`,
+                    freq: state.onlineArrApp ? state.onlineArrApp.freq : '119.000',
+                    online: !!state.onlineArrApp,
+                    phaseJump: 'aproximacao'
+                },
+                {
+                    role: 'TWR / GND DESTINO',
+                    station: `Torre ${state.arrRadioName}`,
+                    callsign: state.onlineArrAtc ? state.onlineArrAtc.callsign : `${state.arrIcao}_TWR`,
+                    freq: state.onlineArrAtc ? state.onlineArrAtc.freq : '118.100',
+                    online: !!state.onlineArrAtc,
+                    phaseJump: 'pousando'
+                },
+                {
+                    role: 'COORDENAÇÃO LIVRE',
+                    station: 'Tráfego Livre',
+                    callsign: 'UNICOM',
+                    freq: '122.800',
+                    online: true,
+                    isUnicom: true,
+                    phaseJump: 'ALL'
+                }
+            ];
+
+            container.innerHTML = slots.map(s => {
+                const statusBadge = s.isUnicom
+                    ? `<span class="bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold">122.800</span>`
+                    : (s.online
+                        ? `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>ONLINE</span>`
+                        : `<span class="bg-slate-800 text-slate-400 border border-slate-700 px-1.5 py-0.5 rounded text-[9px] font-mono">OFFLINE</span>`);
+
+                const cardBorder = s.isUnicom
+                    ? (state.atcMode === 'UNICOM' ? 'border-blue-400 bg-blue-950/40 ring-1 ring-blue-400' : 'border-blue-500/40 hover:border-blue-400 bg-slate-950/90')
+                    : (s.online ? 'border-emerald-500/50 hover:border-emerald-400 bg-emerald-950/20' : 'border-slate-800 hover:border-slate-700 bg-slate-950/60');
+
+                const clickAction = s.isUnicom
+                    ? `setModoATC('UNICOM')`
+                    : `ativarAtcCard('${s.phaseJump}')`;
+
+                return `
+                    <div onclick="${clickAction}" class="p-2 rounded-xl border ${cardBorder} cursor-pointer transition flex flex-col justify-between gap-0.5">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 truncate">${s.role}</span>
+                            ${statusBadge}
+                        </div>
+                        <div class="flex items-baseline justify-between mt-0.5">
+                            <span class="font-mono font-bold text-xs text-white truncate">${s.callsign}</span>
+                            <span class="font-mono font-bold text-[11px] ${s.isUnicom ? 'text-blue-400' : 'text-emerald-400'}">${s.freq}</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 truncate">${s.station}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function ativarAtcCard(phaseId) {
+            setModoATC('ONLINE');
+            if (phaseId && phaseId !== 'ALL') {
+                selecionarFase(phaseId);
+            }
+            mostrarToast('Modo COM TORRE ativado para esta posição!', 'success');
+        }
+
+        // ============================================================================
+        // SINCRONIZAÇÃO DOS CAMPOS E ATUALIZAÇÃO EM TEMPO REAL
+        // ============================================================================
+        function sincronizarInputsComState() {
+            const map = {
+                'inp-callsign': state.callsign,
+                'inp-rules': state.flightRules,
+                'inp-dep-icao': state.depIcao,
+                'inp-dep-name': state.depName,
+                'inp-dep-gate': state.depGate,
+                'inp-dep-atis': state.depAtis,
+                'inp-dep-rwy': state.depRwy,
+                'inp-dep-qnh': state.depQnh,
+                'inp-sid': state.sid,
+                'inp-sid-trans': state.sidTrans,
+                'inp-push-tail': state.pushTailDir,
+                'inp-dep-taxiways': state.depTaxiways,
+                'inp-arr-icao': state.arrIcao,
+                'inp-arr-name': state.arrName,
+                'inp-fl': state.cruiseFl,
+                'inp-app-type': state.appType,
+                'inp-app-letter': state.appLetter,
+                'inp-arr-rwy': state.arrRwy,
+                'inp-arr-qnh': state.arrQnh,
+                'inp-desc-fl': state.assignedDescFl,
+                'inp-arr-taxiways': state.arrTaxiways,
+                'inp-arr-gate': state.arrGate
+            };
+            Object.entries(map).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (el) el.value = val !== undefined && val !== null ? val : '';
+            });
+            atualizarContadorCamposFaltantes();
+        }
+
+        function atualizarIcaoManual(tipo, valor) {
+            const code = valor.toUpperCase().trim();
+            if (tipo === 'DEP') {
+                state.depIcao = code;
+                if (airportLocationDatabase[code]) {
+                    state.depName = airportLocationDatabase[code].label;
+                    state.depRadioName = airportLocationDatabase[code].radioName;
+                    document.getElementById('inp-dep-name').value = state.depName;
+                }
+            } else {
+                state.arrIcao = code;
+                if (airportLocationDatabase[code]) {
+                    state.arrName = airportLocationDatabase[code].label;
+                    state.arrRadioName = airportLocationDatabase[code].radioName;
+                    document.getElementById('inp-arr-name').value = state.arrName;
+                }
+            }
+            renderizarPainelAtc();
+            renderizarDialogos();
+        }
+
+        function atualizarCampo(chave, valor, reRender = true) {
+            state[chave] = valor;
+            if (chave === 'depName') {
+                state.depRadioName = valor.split(',')[0].trim();
+            }
+            if (chave === 'arrName') {
+                state.arrRadioName = valor.split(',')[0].trim();
+            }
+            atualizarContadorCamposFaltantes();
+            if (reRender) renderizarDialogos();
+        }
+
+        function atualizarContadorCamposFaltantes() {
+            const camposVerificar = ['depGate', 'depAtis', 'pushTailDir', 'depTaxiways', 'appLetter', 'assignedDescFl', 'arrTaxiways', 'arrGate'];
+            const faltando = camposVerificar.filter(k => !state[k] || String(state[k]).trim() === '').length;
+            const badge = document.getElementById('missing-count-badge');
+            if (faltando === 0) {
+                badge.innerText = 'Completo';
+                badge.className = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded-full text-[10px] font-mono';
+            } else {
+                badge.innerText = `${faltando} em branco`;
+                badge.className = 'bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full text-[10px] font-mono';
+            }
+        }
+
+        function focarCampoPainel(inputId) {
+            const inlineEl = document.querySelector(`[data-atc-field="${inputId}"]`);
+            if (inlineEl) {
+                inlineEl.focus();
+                inlineEl.select && inlineEl.select();
+                return;
+            }
+            if (!state.briefingOpen) togglePainelDados();
+            setTimeout(() => {
+                const el = document.getElementById(inputId);
+                if (el) {
+                    el.focus();
+                    el.select && el.select();
+                }
+            }, 80);
+        }
+
+        function fmt(valor, targetId, darkBg = true) {
+            if (!valor || String(valor).trim() === '') {
+                const label = state.speechLang === 'EN' ? '(NOT SET)' : '(NÃO INFORMADO)';
+                return `<span onclick="focarCampoPainel('${targetId}')" class="missing-badge" title="Clique para preencher este campo">${label}</span>`;
+            }
+            const cls = darkBg ? 'filled-badge' : 'atc-filled-badge';
+            return `<span class="${cls}">${valor}</span>`;
+        }
+
+        function fmtAppProcedure(darkBg = true) {
+            const type = state.appType || 'ILS';
+            const cls = darkBg ? 'filled-badge' : 'atc-filled-badge';
+            if (type === 'VISUAL') {
+                return `<span class="${cls}">VISUAL</span>`;
+            }
+            const letterPart = fmt(state.appLetter, 'inp-app-letter', darkBg);
+            return `<span class="${cls}">${type}</span> ${letterPart}`;
+        }
+
+        // ============================================================================
+        // MOTOR DE DIÁLOGOS NATURAIS COM 5 ESTILOS REAIS (AZUL / LATAM / GOL / DECEA)
+        // ============================================================================
+        function construirDialogosPorFase(phaseId) {
+            const lang = state.speechLang;
+            const v = state.variationIndex % 5; // 0, 1, 2, 3 ou 4 (5 estilos completos)
+            const saudacao = obterSaudacao(lang);
+            const cs = fmtCs(true);
+            const atcCs = obterCallsignFonia(state.callsign) || state.callsign;
+
+            const depTowerTitle = state.onlineDepAtc
+                ? `${ lang === 'EN' ? 'Tower' : 'Torre' } ${state.depRadioName} - ${state.onlineDepAtc.callsign} ${state.onlineDepAtc.freq}`
+                : `${ lang === 'EN' ? 'Tower' : 'Torre' } ${state.depRadioName} - ${state.depIcao}_TWR 118.700`;
+
+            const appControlTitle = state.onlineAppAtc
+                ? `${ lang === 'EN' ? 'Control' : 'Controle' } ${state.depRadioName} - ${state.onlineAppAtc.callsign} ${state.onlineAppAtc.freq}`
+                : `${ lang === 'EN' ? 'Control' : 'Controle' } ${state.depRadioName} - ${state.depIcao}_APP 120.450`;
+
+            const arrAppTitle = state.onlineArrApp
+                ? `${ lang === 'EN' ? 'Approach' : 'Controle' } ${state.arrRadioName} - ${state.onlineArrApp.callsign} ${state.onlineArrApp.freq}`
+                : `${ lang === 'EN' ? 'Approach' : 'Controle' } ${state.arrRadioName} - ${state.arrIcao}_APP 119.000`;
+
+            const arrTowerTitle = state.onlineArrAtc
+                ? `${ lang === 'EN' ? 'Tower' : 'Torre' } ${state.arrRadioName} - ${state.onlineArrAtc.callsign} ${state.onlineArrAtc.freq}`
+                : `${ lang === 'EN' ? 'Tower' : 'Torre' } ${state.arrRadioName} - ${state.arrIcao}_TWR 118.100`;
+
+            const twrDepCall = lang === 'EN' ? `${state.depRadioName} Tower` : `Torre ${state.depRadioName}`;
+            const appDepCall = lang === 'EN' ? `${state.depRadioName} Control` : `Controle ${state.depRadioName}`;
+            const appArrCall = lang === 'EN' ? `${state.arrRadioName} Approach` : `Controle ${state.arrRadioName}`;
+            const twrArrCall = lang === 'EN' ? `${state.arrRadioName} Tower` : `Torre ${state.arrRadioName}`;
+
+            // Verifica se deve exibir modo UNICOM (Coordenação Livre)
+            const usarUnicom = state.atcMode === 'UNICOM' ||
+                (state.atcMode === 'AUTO' && (
+                    (['autorizacao', 'push_taxi', 'decolagem'].includes(phaseId) && !state.onlineDepAtc && !state.onlineDepGnd) ||
+                    (['subida'].includes(phaseId) && !state.onlineAppAtc && !state.onlineCtrAtc) ||
+                    (['aproximacao', 'pousando', 'taxi_chegada'].includes(phaseId) && !state.onlineArrAtc && !state.onlineArrApp)
+                ));
+
+            if (usarUnicom) {
+                return construirDialogosUnicomInterativo(phaseId, lang, v);
+            }
+
+            // ========================================================================
+            // 1. AUTORIZANDO O PLANO DE VOO (5 ESTILOS REAIS COM TORRE)
+            // ========================================================================
+            if (phaseId === 'autorizacao') {
+                const pos = fmt(state.depGate, 'inp-dep-gate');
+                const rules = fmt(state.flightRules, 'inp-rules');
+                const dest = fmt(state.arrName, 'inp-arr-name');
+                const fl = fmt(state.cruiseFl, 'inp-fl');
+                const atis = fmt(state.depAtis, 'inp-dep-atis');
+                const rwy = fmt(state.depRwy, 'inp-dep-rwy');
+                const sid = fmt(state.sid, 'inp-sid');
+                const trans = fmt(state.sidTrans, 'inp-sid-trans');
+                const sqwk = fmt(state.squawk, 'squawk');
+
+                const inputSquawkHtml = `<input type="text" data-atc-field="squawk" value="${state.squawk}" maxlength="4" placeholder="____" oninput="atualizarInputTorre('squawk', this.value)" class="inline-atc-input w-20 text-center">`;
+
+                if (lang === 'EN') {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, ${saudacao}, ${cs} on stand ${pos} with information ${atis}, requesting ${rules} clearance to ${dest}, flight level ${fl}.`,
+                            `${twrDepCall}, ${saudacao}, ${cs} at gate ${pos}, information ${atis}, ready to copy ${rules} to ${dest}, FL${fl}.`,
+                            `${twrDepCall}, very ${saudacao}, ${cs} parked at stand ${pos} with ATIS information ${atis}, requesting ${rules} airways clearance to ${dest} at flight level ${fl}.`,
+                            `${twrDepCall}, ${cs}, stand ${pos}, info ${atis}, request ${rules} clearance to ${dest} FL${fl}.`,
+                            `${twrDepCall}, ${saudacao}, ${cs} at position ${pos}, requesting ${rules} clearance to ${dest}, flight level ${fl}, with information ${atis}, ready to copy.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs} ${saudacao}, cleared ${state.flightRules} to ${state.arrName} at flight level ${state.cruiseFl}, departure runway ${state.depRwy}, ${state.sid} departure with ${state.sidTrans} transition, squawk ${inputSquawkHtml}, read back!` },
+                        { role: 'PILOT', text: [
+                            `Cleared to ${dest}, flight level ${fl}, runway ${rwy} via ${sid} departure, ${trans} transition, squawk ${sqwk}, ${cs}.`,
+                            `To ${dest} FL${fl}, runway ${rwy}, ${sid} with ${trans} transition, squawking ${sqwk}, ${cs}.`,
+                            `Copy clearance: cleared ${rules} to ${dest} at flight level ${fl}, departure runway ${rwy} on the ${sid} profile with ${trans} transition, squawk code ${sqwk} for ${cs}.`,
+                            `Cleared ${dest} FL${fl}, rwy ${rwy}, ${sid} transition ${trans}, squawk ${sqwk}, ${cs}.`,
+                            `Cleared ${rules} to ${dest}, flight level ${fl}, departure runway ${rwy}, ${sid} departure with ${trans} transition, squawk ${sqwk}, ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs} readback is correct, report when ready for pushback and engine start.` },
+                        { role: 'PILOT', text: [
+                            `Will call you ready for pushback and start, ${cs}, thanks!`,
+                            `Wilco, calling ready for push and start, ${cs}.`,
+                            `We will report when ready for pushback and engine start, thank you sir, ${cs}.`,
+                            `Call you back for push and start, ${cs}.`,
+                            `Will report ready for pushback and engine start, ${cs}, thank you!`
+                        ][v] }
+                    ];
+                } else {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, ${saudacao}, é o ${cs} na posição ${pos} com a informação ${atis}, solicita autorização do plano ${rules} para ${dest} no nível ${fl}.`,
+                            `${twrDepCall}, ${saudacao}, ${cs} no box ${pos} com ${atis}, solicita o plano para ${dest}, nível ${fl}, pronto pra cópia.`,
+                            `${twrDepCall}, muito ${saudacao}, o ${cs} encontra-se na posição ${pos}, ciente da informação ${atis}, solicita autorização do plano ${rules} com destino a ${dest} no nível de voo ${fl}.`,
+                            `${twrDepCall}, ${saudacao}, ${cs} posição ${pos}, ciente ${atis}, pronto cópia para ${dest} no ${fl}.`,
+                            `${twrDepCall} ${saudacao}, ${cs} na posição ${pos}, solicita ${rules} para ${dest}, nível de voo ${fl}, ciente da informação ${atis}, pronto para cópia.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs} ${saudacao}, autorizado ${state.flightRules} para ${state.arrName} no nível de voo ${state.cruiseFl}, decola da pista ${state.depRwy}, perfil de saída ${state.sid} com transição em ${state.sidTrans}, código transponder ${inputSquawkHtml}, coteje!` },
+                        { role: 'PILOT', text: [
+                            `Ciente, autorizado a ${dest} no nível ${fl}, decola da ${rwy} na saída ${sid} com transição em ${trans}, transponder ${sqwk} no ${cs}.`,
+                            `Autorizado ${dest} nível ${fl}, pista ${rwy}, saída ${sid} transição ${trans}, código ${sqwk} no transponder, ${cs}.`,
+                            `Copiado controle: autorizado ${rules} para ${dest} no nível de voo ${fl}, pista em uso ${rwy}, perfil de saída ${sid} com transição em ${trans}, transponder ${sqwk} para o ${cs}.`,
+                            `Plano autorizado a ${dest} no ${fl}, pista ${rwy}, saída ${sid} transição ${trans}, squawk ${sqwk}, ${cs}.`,
+                            `Autorizado plano de voo para ${dest}, nível de voo ${fl}, decola da pista ${rwy}, perfil de saída ${sid} com transição em ${trans}, código transponder ${sqwk} para o ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs} o cotejamento está correto, reporte quando pronto para pushback e acionamento.` },
+                        { role: 'PILOT', text: [
+                            `Chama pronto para o pushback e acionamento, obrigado, ${cs}!`,
+                            `Reporta pronto pro push e acionamento, ${cs}.`,
+                            `Perfeito, reportaremos quando prontos para o pushback e acionamento dos motores, obrigado, ${cs}.`,
+                            `Vai chamar no push e acionamento, ${cs}, valeu!`,
+                            `Vai reportar para pushback e acionamento o ${cs}, grato!`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // ========================================================================
+            // 2. PUSHBACK, ACIONAMENTO E TÁXI (5 ESTILOS REAIS COM TORRE)
+            // ========================================================================
+            if (phaseId === 'push_taxi') {
+                const pos = fmt(state.depGate, 'inp-dep-gate');
+                const rwy = fmt(state.depRwy, 'inp-dep-rwy');
+                const tailBadge = fmt(state.pushTailDir, 'pushTailDir');
+                const twyBadge = fmt(state.depTaxiways, 'depTaxiways');
+
+                const inputTailHtml = `<input type="text" list="push-tail-list" data-atc-field="pushTailDir" value="${state.pushTailDir}" placeholder="DIREITA / ESQUERDA" oninput="atualizarInputTorre('pushTailDir', this.value)" class="inline-atc-input w-40 text-center uppercase">`;
+                const inputTwyHtml = `<input type="text" data-atc-field="depTaxiways" value="${state.depTaxiways}" placeholder="Ex: A, B" oninput="atualizarInputTorre('depTaxiways', this.value)" class="inline-atc-input w-28 text-center uppercase">`;
+
+                if (lang === 'EN') {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, ${cs} on stand ${pos}, ready for pushback and engine start.`,
+                            `${twrDepCall}, ${cs} gate ${pos}, request push and start.`,
+                            `${twrDepCall}, ${cs} at position ${pos} is ready for pushback and engine start.`,
+                            `${twrDepCall}, ${cs} stand ${pos}, ready for push.`,
+                            `${twrDepCall}, ${cs} ready for pushback and engine start at stand ${pos}.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, cleared for pushback and engine start, face tail ${inputTailHtml}, report ready for taxi.` },
+                        { role: 'PILOT', text: [
+                            `Cleared pushback and start facing tail ${tailBadge}, we'll call ready for taxi, ${cs}.`,
+                            `Push and start approved tail ${tailBadge}, will report for taxi, ${cs}.`,
+                            `Cleared for pushback and start with tail ${tailBadge}, will report when ready for taxi, ${cs}.`,
+                            `Pushing tail ${tailBadge}, call you for taxi, ${cs}.`,
+                            `Cleared pushback tail ${tailBadge}, will report ready for taxi, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, ${cs} pushback completed, ready for taxi.`,
+                            `${twrDepCall}, ${cs} ready for taxi.`,
+                            `${twrDepCall}, engines started, ${cs} is ready for taxi instructions.`,
+                            `${twrDepCall}, ${cs} ready to taxi.`,
+                            `${twrDepCall}, ${cs} is ready for taxi.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, taxi approved via ${inputTwyHtml} to holding point runway ${state.depRwy}.` },
+                        { role: 'PILOT', text: [
+                            `Taxiing via ${twyBadge} to holding point runway ${rwy}, ${cs}.`,
+                            `Via ${twyBadge} to holding point ${rwy}, ${cs}.`,
+                            `Cleared to taxi via ${twyBadge} to the holding point of runway ${rwy}, ${cs}.`,
+                            `Via ${twyBadge} hold short rwy ${rwy}, ${cs}.`,
+                            `Taxi approved via ${twyBadge} to holding point runway ${rwy}, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, ${cs} approaching holding point runway ${rwy}, ready for departure.`,
+                            `${twrDepCall}, ${cs} holding short of ${rwy}, ready.`,
+                            `${twrDepCall}, ${cs} is at the holding point of runway ${rwy}, ready for takeoff.`,
+                            `${twrDepCall}, ${cs} short of ${rwy}, ready to go.`,
+                            `${twrDepCall}, ${cs} is at the holding point of runway ${rwy}.`
+                        ][v] }
+                    ];
+                } else {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, é o ${cs} na posição ${pos}, pronto para o pushback e acionamento.`,
+                            `${twrDepCall}, ${cs} no box ${pos}, solicita push e acionamento.`,
+                            `${twrDepCall}, o ${cs} na posição ${pos} está pronto para iniciar o pushback e acionamento dos motores.`,
+                            `${twrDepCall}, ${cs} na ${pos}, pronto pro recuo e acionamento.`,
+                            `${twrDepCall}, ${cs} pronto para pushback e acionamento na posição ${pos}.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, autorizado pushback e acionamento, com cauda à ${inputTailHtml}, reporte pronto para o táxi.` },
+                        { role: 'PILOT', text: [
+                            `Livre pushback e acionamento com cauda à ${tailBadge}, chama pronto para o táxi, ${cs}.`,
+                            `Autorizado push e acionamento cauda à ${tailBadge}, reporta pro táxi, ${cs}.`,
+                            `Ciente, autorizado o recuo e acionamento com cauda à ${tailBadge}, reportará quando pronto para o táxi, ${cs}.`,
+                            `Iniciando recuo cauda à ${tailBadge}, chama no táxi, ${cs}.`,
+                            `Autorizado pushback cauda à ${tailBadge}, vai reportar pronto para o táxi o ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, ${cs} com motores acionados, pronto para o táxi.`,
+                            `${twrDepCall}, ${cs} pronto para o táxi.`,
+                            `${twrDepCall}, acionamento completo, o ${cs} solicita instruções de táxi.`,
+                            `${twrDepCall}, livre desconexão, ${cs} pronto pro táxi.`,
+                            `${twrDepCall}, o ${cs} está pronto para o táxi.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, táxi autorizado via ${inputTwyHtml} até o ponto de espera da pista ${state.depRwy}.` },
+                        { role: 'PILOT', text: [
+                            `Prossegue no táxi via ${twyBadge} até o ponto de espera da pista ${rwy}, ${cs}.`,
+                            `Via ${twyBadge} até o ponto de espera da ${rwy}, ${cs}.`,
+                            `Ciente, táxi autorizado via ${twyBadge} até o ponto de espera da pista ${rwy}, ${cs}.`,
+                            `Segue via ${twyBadge} pro ponto de espera da ${rwy}, ${cs}.`,
+                            `Táxi autorizado via ${twyBadge} até o ponto de espera da pista ${rwy}, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrDepCall}, ${cs} atingindo o ponto de espera da pista ${rwy}, pronto para decolar.`,
+                            `${twrDepCall}, ${cs} no ponto de espera da ${rwy}, pronto.`,
+                            `${twrDepCall}, o ${cs} encontra-se no ponto de espera da cabeceira ${rwy}, pronto para a decolagem.`,
+                            `${twrDepCall}, ${cs} curto da ${rwy}, pronto pra sair.`,
+                            `${twrDepCall}, ${cs} está no ponto de espera da pista ${rwy}.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // ========================================================================
+            // 3. DECOLAGEM (5 ESTILOS REAIS COM TORRE)
+            // ========================================================================
+            if (phaseId === 'decolagem') {
+                const rwy = fmt(state.depRwy, 'inp-dep-rwy');
+                const qnh = fmt(state.depQnh, 'inp-dep-qnh');
+
+                if (lang === 'EN') {
+                    const nextEn = state.onlineAppAtc
+                        ? `contact ${appDepCall} on frequency ${state.onlineAppAtc.freq}`
+                        : `coordinate on UNICOM frequency 122.800`;
+                    const readbackNextEn = [
+                        state.onlineAppAtc
+                            ? `Over to ${appDepCall} on ${state.onlineAppAtc.freq}, thanks for the help, good day, ${cs}!`
+                            : `Switching to UNICOM 122.800, thanks for your service, ${cs}!`,
+                        state.onlineAppAtc
+                            ? `${state.onlineAppAtc.freq} for ${cs}, good day.`
+                            : `UNICOM 122.800, good day, ${cs}.`,
+                        state.onlineAppAtc
+                            ? `We will contact ${appDepCall} on frequency ${state.onlineAppAtc.freq}, thank you for the ATC, ${cs}.`
+                            : `We will monitor UNICOM on 122.800, thank you for the coverage, ${cs}.`,
+                        state.onlineAppAtc
+                            ? `Going to ${state.onlineAppAtc.freq}, thanks, ${cs}.`
+                            : `Switching 122.800, thanks, ${cs}.`,
+                        state.onlineAppAtc
+                            ? `Contacting ${appDepCall} on ${state.onlineAppAtc.freq}, ${cs}, thank you, good day!`
+                            : `Will call UNICOM on frequency 122.800, ${cs}, thank you, see you next time.`
+                    ][v];
+
+                    return [
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, roger, wind ${state.depWindDir} degrees at ${state.depWindSpd} knots, QNH ${state.depQnh}, runway ${state.depRwy}, cleared for takeoff.` },
+                        { role: 'PILOT', text: [
+                            `Cleared for takeoff runway ${rwy}, QNH ${qnh}, ${cs}.`,
+                            `Cleared takeoff ${rwy}, ${qnh}, ${cs}.`,
+                            `Cleared for takeoff on runway ${rwy} with QNH ${qnh}, ${cs}.`,
+                            `Rolling ${rwy}, QNH ${qnh}, ${cs}.`,
+                            `Cleared for takeoff runway ${rwy}, QNH ${qnh}, ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, airborne at minute ${state.takeoffMin} of the hour, ${nextEn}, have a good flight!` },
+                        { role: 'PILOT', text: readbackNextEn }
+                    ];
+                } else {
+                    const nextPt = state.onlineAppAtc
+                        ? `chame o ${appDepCall} na frequência ${state.onlineAppAtc.freq}`
+                        : `coordene com a UNICOM na frequência 122.800`;
+                    const readbackNextPt = [
+                        state.onlineAppAtc
+                            ? `Passando com o ${appDepCall} na ${state.onlineAppAtc.freq}, obrigado pelo apoio e bom trabalho, ${cs}!`
+                            : `Passando para a livre 122.800, muito obrigado pelo controle e bom turno, ${cs}!`,
+                        state.onlineAppAtc
+                            ? `Na ${state.onlineAppAtc.freq} com o Controle, obrigado, ${cs}.`
+                            : `Vai pra UNICOM 122.800, grato, ${cs}.`,
+                        state.onlineAppAtc
+                            ? `Ciente, chamaremos o ${appDepCall} na frequência ${state.onlineAppAtc.freq}, muito obrigado pelo controle, ${cs}.`
+                            : `Ciente, passaremos a coordenar na UNICOM 122.800, obrigado pela atenção e bom trabalho, ${cs}.`,
+                        state.onlineAppAtc
+                            ? `Chama na ${state.onlineAppAtc.freq} o ${cs}, valeu, bom serviço!`
+                            : `Na 122.800 agora o ${cs}, obrigado, até a próxima!`,
+                        state.onlineAppAtc
+                            ? `Vai chamar o ${appDepCall} na frequência ${state.onlineAppAtc.freq} o ${cs}, obrigado, até a próxima.`
+                            : `Vai chamar a UNICOM na frequência 122.800 o ${cs}, obrigado, até a próxima.`
+                    ][v];
+
+                    return [
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, ciente, autorizada a decolagem da pista ${state.depRwy}, o vento é de ${state.depWindDir} graus com ${state.depWindSpd} nós, ajuste ${state.depQnh}.` },
+                        { role: 'PILOT', text: [
+                            `Livre decolagem da pista ${rwy}, ajuste ${qnh} no ${cs}.`,
+                            `Autorizado decolar da ${rwy}, QNH ${qnh}, ${cs}.`,
+                            `Ciente, decolagem autorizada na pista ${rwy} com ajuste de altímetro ${qnh}, ${cs}.`,
+                            `Decolando da ${rwy}, ajuste ${qnh}, ${cs}.`,
+                            `Autorizada a decolagem pista ${rwy}, ajuste ${qnh}, ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: depTowerTitle, text: `${atcCs}, decolado aos ${state.takeoffMin} minutos da hora, ${nextPt}, bom voo!` },
+                        { role: 'PILOT', text: readbackNextPt }
+                    ];
+                }
+            }
+
+            // ========================================================================
+            // 4. EM SUBIDA (5 ESTILOS REAIS COM TORRE/APP)
+            // ========================================================================
+            if (phaseId === 'subida') {
+                const sid = fmt(state.sid, 'inp-sid');
+                const restrBadge = fmt(state.climbRestriction, 'climbRestriction');
+                const flAssignedBadge = fmt(state.assignedClimbFl, 'assignedClimbFl');
+
+                const inputPassAltHtml = `<input type="text" data-atc-field="passingAlt" value="${state.passingAlt}" placeholder="Altitude" oninput="atualizarInputTorre('passingAlt', this.value)" class="inline-atc-input w-24 text-center">`;
+                const inputRestrHtml = `<input type="text" list="climb-restr-list" data-atc-field="climbRestriction" value="${state.climbRestriction}" placeholder="SEM RESTRIÇÕES" oninput="atualizarInputTorre('climbRestriction', this.value)" class="inline-atc-input w-40 text-center uppercase">`;
+                const inputClimbFlHtml = `<input type="text" data-atc-field="assignedClimbFl" value="${state.assignedClimbFl}" placeholder="FL" oninput="atualizarInputTorre('assignedClimbFl', this.value)" class="inline-atc-input w-20 text-center">`;
+
+                if (lang === 'EN') {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${appDepCall}, ${saudacao}, ${cs} airborne on the ${sid} departure, passing ${inputPassAltHtml} feet.`,
+                            `${appDepCall}, ${saudacao}, ${cs} on ${sid}, passing ${inputPassAltHtml} feet climbing.`,
+                            `${appDepCall}, very ${saudacao}, ${cs} is with you following the ${sid} departure, passing ${inputPassAltHtml} feet.`,
+                            `${appDepCall}, ${cs}, ${sid} departure passing ${inputPassAltHtml} feet.`,
+                            `${appDepCall} ${saudacao}, ${cs} on ${sid} departure, passing ${inputPassAltHtml} feet.`
+                        ][v] },
+                        { role: 'ATC', station: appControlTitle, text: `${atcCs} ${saudacao}, radar contact on departure, climb ${inputRestrHtml} to flight level ${inputClimbFlHtml}.` },
+                        { role: 'PILOT', text: [
+                            `Climbing ${restrBadge} to flight level ${flAssignedBadge}, ${cs}.`,
+                            `Up to FL${flAssignedBadge} ${restrBadge}, ${cs}.`,
+                            `Roger radar contact, climbing ${restrBadge} to flight level ${flAssignedBadge}, ${cs}.`,
+                            `Climb ${restrBadge} FL${flAssignedBadge}, ${cs}.`,
+                            `Will climb ${restrBadge} to flight level ${flAssignedBadge}, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${appDepCall}, ${cs} reaching and maintaining flight level ${flAssignedBadge}.`,
+                            `${appDepCall}, ${cs} level FL${flAssignedBadge}.`,
+                            `${appDepCall}, ${cs} is now level at flight level ${flAssignedBadge}.`,
+                            `${appDepCall}, ${cs} maintaining ${flAssignedBadge}.`,
+                            `${appDepCall}, reporting flight level ${flAssignedBadge}, ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: appControlTitle, text: `${atcCs}, roger, call UNICOM on frequency 122.800, good flight.` },
+                        { role: 'PILOT', text: [
+                            `Switching to UNICOM on 122.800, thanks for the control, ${cs}!`,
+                            `122.800 for ${cs}, thank you, bye-bye.`,
+                            `We will coordinate on UNICOM 122.800, thank you for your assistance today, ${cs}.`,
+                            `Over to 122.800, thanks, ${cs}.`,
+                            `Will coordinate on UNICOM frequency 122.800, see you next time, thank you, ${cs}.`
+                        ][v] }
+                    ];
+                } else {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${appDepCall}, ${saudacao}, é o ${cs} na subida cumprindo o perfil ${sid}, passando ${inputPassAltHtml} pés.`,
+                            `${appDepCall}, ${saudacao}, ${cs} na ${sid}, cruzando ${inputPassAltHtml} pés.`,
+                            `${appDepCall}, muito ${saudacao}, o ${cs} está na sua frequência cumprindo a saída ${sid}, passando por ${inputPassAltHtml} pés em subida.`,
+                            `${appDepCall}, ${saudacao}, ${cs} na saída ${sid} passando ${inputPassAltHtml} pés.`,
+                            `${appDepCall} ${saudacao}, ${cs} perfil de saída ${sid}, passando ${inputPassAltHtml} pés.`
+                        ][v] },
+                        { role: 'ATC', station: appControlTitle, text: `${atcCs} ${saudacao}, contato radar na decolagem, suba ${inputRestrHtml} para o nível de voo ${inputClimbFlHtml}.` },
+                        { role: 'PILOT', text: [
+                            `Livre subida ${restrBadge} para o nível ${flAssignedBadge}, ${cs}.`,
+                            `Sobe ${restrBadge} pro nível ${flAssignedBadge}, ${cs}.`,
+                            `Ciente do contato radar, subindo ${restrBadge} para o nível de voo ${flAssignedBadge}, ${cs}.`,
+                            `Subindo ${restrBadge} até o ${flAssignedBadge}, ${cs}.`,
+                            `Vai subir ${restrBadge} para o nível de voo ${flAssignedBadge}, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${appDepCall}, ${cs} atingindo e mantendo o nível de voo ${flAssignedBadge}.`,
+                            `${appDepCall}, ${cs} nivelado no ${flAssignedBadge}.`,
+                            `${appDepCall}, o ${cs} informa nivelado no nível de voo ${flAssignedBadge}.`,
+                            `${appDepCall}, mantendo o ${flAssignedBadge} o ${cs}.`,
+                            `${appDepCall}, reportando o nível de voo ${flAssignedBadge}, ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: appControlTitle, text: `${atcCs}, ciente, chame a UNICOM, na frequência 122.800, bom voo.` },
+                        { role: 'PILOT', text: [
+                            `Passando para a UNICOM na 122.800, obrigado pelo controle e bom turno, ${cs}!`,
+                            `Na livre 122.800 o ${cs}, obrigado, até a próxima.`,
+                            `Ciente controle, coordenaremos na frequência livre 122.800, obrigado pelo apoio, ${cs}.`,
+                            `Vai pra 122.800 o ${cs}, valeu, bom trabalho!`,
+                            `Vai coordenar com a UNICOM, na frequência 122.800, até a próxima, obrigado, ${cs}.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // ========================================================================
+            // 5. EM APROXIMAÇÃO / DESCIDA (5 ESTILOS REAIS COM TORRE/APP)
+            // ========================================================================
+            if (phaseId === 'aproximacao') {
+                const inputDescFl = `<input type="text" data-atc-field="assignedDescFl" value="${state.assignedDescFl}" placeholder="FL" oninput="atualizarInputTorre('assignedDescFl', this.value)" class="inline-atc-input w-20 text-center">`;
+                const descFlBadge = fmt(state.assignedDescFl, 'assignedDescFl');
+                const appProcPilot = fmtAppProcedure(true);
+                const appProcAtc = fmtAppProcedure(false);
+                const arrRwy = fmt(state.arrRwy, 'inp-arr-rwy');
+                const twrFreq = state.onlineArrAtc ? state.onlineArrAtc.freq : '118.100';
+
+                if (lang === 'EN') {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${appArrCall}, ${saudacao}, ${cs} is with you inbound for runway ${arrRwy}.`,
+                            `${appArrCall}, ${saudacao}, ${cs} checking in on descent.`,
+                            `${appArrCall}, very ${saudacao}, ${cs} is on your frequency descending inbound ${state.arrName}.`,
+                            `${appArrCall}, ${saudacao}, ${cs} with you.`,
+                            `${appArrCall} ${saudacao}, ${cs} is with you.`
+                        ][v] },
+                        { role: 'ATC', station: arrAppTitle, text: `${atcCs} ${saudacao}, radar contact, continue your descent to flight level ${inputDescFl}.` },
+                        { role: 'PILOT', text: [
+                            `Continuing descent to flight level ${descFlBadge}, ${cs}.`,
+                            `Down to FL${descFlBadge}, ${cs}.`,
+                            `Roger, continuing our descent to flight level ${descFlBadge}, ${cs}.`,
+                            `Descending FL${descFlBadge}, ${cs}.`,
+                            `Will continue descent to flight level ${descFlBadge}, ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: arrAppTitle, text: `${atcCs} cleared ${appProcAtc} approach, runway ${state.arrRwy}, report established.` },
+                        { role: 'PILOT', text: [
+                            `Cleared ${appProcPilot} approach for runway ${arrRwy}, we'll call established, ${cs}.`,
+                            `Cleared ${appProcPilot} runway ${arrRwy}, wilco, ${cs}.`,
+                            `Cleared for the ${appProcPilot} approach to runway ${arrRwy}, will report when established, ${cs}.`,
+                            `Cleared ${appProcPilot} rwy ${arrRwy}, call you established, ${cs}.`,
+                            `Cleared ${appProcPilot}, runway ${arrRwy}, will report established, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${appArrCall}, ${cs} established on the ${appProcPilot} for runway ${arrRwy}.`,
+                            `${appArrCall}, ${cs} established ${appProcPilot} runway ${arrRwy}.`,
+                            `${appArrCall}, ${cs} is fully established on the ${appProcPilot} approach for runway ${arrRwy}.`,
+                            `${appArrCall}, ${cs} locked on ${appProcPilot} rwy ${arrRwy}.`,
+                            `${appArrCall}, established on ${appProcPilot}, runway ${arrRwy}, ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: arrAppTitle, text: `${atcCs} contact ${twrArrCall} now on frequency ${twrFreq}, see you next time.` },
+                        { role: 'PILOT', text: [
+                            `Over to ${twrArrCall} on ${twrFreq}, thanks for the vectors, ${cs}!`,
+                            `Tower on ${twrFreq}, good day, ${cs}.`,
+                            `Contacting ${twrArrCall} on frequency ${twrFreq}, thank you very much, ${cs}.`,
+                            `Switching Tower ${twrFreq}, thanks, ${cs}.`,
+                            `Contacting ${twrArrCall} on ${twrFreq}, thank you, ${cs}!`
+                        ][v] }
+                    ];
+                } else {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${appArrCall}, ${saudacao}, é o ${cs} na escuta iniciando chegada para a pista ${arrRwy}.`,
+                            `${appArrCall}, ${saudacao}, ${cs} com o senhor na descida.`,
+                            `${appArrCall}, muito ${saudacao}, o ${cs} está na frequência iniciando aproximação para ${state.arrName}.`,
+                            `${appArrCall}, ${saudacao}, ${cs} na frequência.`,
+                            `${appArrCall} ${saudacao}, o ${cs} está com o senhor.`
+                        ][v] },
+                        { role: 'ATC', station: arrAppTitle, text: `${atcCs} ${saudacao}, continue sua descida para o nível de voo ${inputDescFl}.` },
+                        { role: 'PILOT', text: [
+                            `Continua na descida para o nível ${descFlBadge} o ${cs}.`,
+                            `Desce pro nível ${descFlBadge}, ${cs}.`,
+                            `Ciente controle, mantendo a descida para o nível de voo ${descFlBadge}, ${cs}.`,
+                            `Descendo pro ${descFlBadge}, ${cs}.`,
+                            `Vai continuar a descida para o nível de voo ${descFlBadge} o ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: arrAppTitle, text: `${atcCs} autorizado ${appProcAtc}, pista ${state.arrRwy}, reporte estabilizado.` },
+                        { role: 'PILOT', text: [
+                            `Autorizado no perfil ${appProcPilot} da pista ${arrRwy}, chama estabilizado, ${cs}.`,
+                            `Livre ${appProcPilot} pista ${arrRwy}, reporta estabilizado, ${cs}.`,
+                            `Ciente, autorizado aproximação ${appProcPilot} para a pista ${arrRwy}, reportaremos estabilizados, ${cs}.`,
+                            `Autorizado ${appProcPilot} da ${arrRwy}, chama estabilizado o ${cs}.`,
+                            `Autorizado ${appProcPilot}, pista ${arrRwy}, vai reportar estabilizado o ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${appArrCall}, ${cs} estabilizado no ${appProcPilot} da pista ${arrRwy}.`,
+                            `${appArrCall}, estabilizado no ${appProcPilot} da ${arrRwy}, ${cs}.`,
+                            `${appArrCall}, o ${cs} informa estabilizado na final do procedimento ${appProcPilot} para a pista ${arrRwy}.`,
+                            `${appArrCall}, ${cs} estabelecido no ${appProcPilot} pista ${arrRwy}.`,
+                            `${appArrCall}, estabilizado no ${appProcPilot}, pista ${arrRwy} o ${cs}.`
+                        ][v] },
+                        { role: 'ATC', station: arrAppTitle, text: `${atcCs} coordene agora com a ${twrArrCall} na frequência ${twrFreq}, até a próxima.` },
+                        { role: 'PILOT', text: [
+                            `Passando com a ${twrArrCall} na ${twrFreq}, obrigado pelo controle, ${cs}!`,
+                            `Chama a Torre na ${twrFreq}, obrigado, ${cs}.`,
+                            `Ciente, chamaremos a ${twrArrCall} na frequência ${twrFreq}, muito obrigado, ${cs}.`,
+                            `Na ${twrFreq} com a Torre, valeu controle, ${cs}!`,
+                            `Vai chamar a ${twrArrCall} na frequência ${twrFreq} o ${cs}, obrigado!`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // ========================================================================
+            // 6. POUSANDO (5 ESTILOS REAIS COM TORRE)
+            // ========================================================================
+            if (phaseId === 'pousando') {
+                const arrRwy = fmt(state.arrRwy, 'inp-arr-rwy');
+                const arrQnh = fmt(state.arrQnh, 'inp-arr-qnh');
+
+                if (lang === 'EN') {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${twrArrCall}, ${saudacao}, ${cs} stabilized on final for runway ${arrRwy}, gear down and locked.`,
+                            `${twrArrCall}, ${saudacao}, ${cs} short final runway ${arrRwy}, three green.`,
+                            `${twrArrCall}, very ${saudacao}, ${cs} is established on final approach for runway ${arrRwy}, landing gear down and locked.`,
+                            `${twrArrCall}, ${cs} final rwy ${arrRwy}, gear down.`,
+                            `${twrArrCall} ${saudacao}, ${cs} on final runway ${arrRwy}, gear down and locked.`
+                        ][v] },
+                        { role: 'ATC', station: arrTowerTitle, text: `${atcCs} ${saudacao}, cleared to land runway ${state.arrRwy}, wind is ${state.arrWindDir} degrees at ${state.arrWindSpd} knots, QNH ${state.arrQnh}, report vacating the runway, good landing.` },
+                        { role: 'PILOT', text: [
+                            `Cleared to land runway ${arrRwy}, QNH ${arrQnh}, we'll call vacating, ${cs}.`,
+                            `Cleared to land ${arrRwy}, ${arrQnh}, wilco, ${cs}.`,
+                            `Cleared to land on runway ${arrRwy} with QNH ${arrQnh}, will report runway vacated, thank you, ${cs}.`,
+                            `Cleared to land rwy ${arrRwy}, QNH ${arrQnh}, ${cs}.`,
+                            `Cleared to land runway ${arrRwy}, QNH ${arrQnh}, will report vacating the runway, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrArrCall}, ${cs} has vacated runway ${arrRwy}.`,
+                            `${twrArrCall}, ${cs} clear of ${arrRwy}.`,
+                            `${twrArrCall}, ${cs} is completely clear of runway ${arrRwy}.`,
+                            `${twrArrCall}, runway ${arrRwy} vacated, ${cs}.`,
+                            `${twrArrCall}, ${cs} reports runway vacated.`
+                        ][v] }
+                    ];
+                } else {
+                    return [
+                        { role: 'PILOT', text: [
+                            `${twrArrCall}, ${saudacao}, é o ${cs} estabilizado na final da pista ${arrRwy}, trem baixado e travado.`,
+                            `${twrArrCall}, ${saudacao}, ${cs} na curta final da ${arrRwy}, baixado e travado.`,
+                            `${twrArrCall}, muito ${saudacao}, o ${cs} encontra-se estabilizado na final da pista ${arrRwy}, trem de pouso baixado e travado.`,
+                            `${twrArrCall}, ${saudacao}, ${cs} final da ${arrRwy}, três verdes.`,
+                            `${twrArrCall} ${saudacao}, ${cs} na final da pista ${arrRwy}, baixado e travado.`
+                        ][v] },
+                        { role: 'ATC', station: arrTowerTitle, text: `${atcCs} ${saudacao}, pouso autorizado pista ${state.arrRwy}, o vento é de ${state.arrWindDir} graus com ${state.arrWindSpd} nós, ajuste ${state.arrQnh}, reporte livrando a pista, bom pouso.` },
+                        { role: 'PILOT', text: [
+                            `Livre pouso na pista ${arrRwy}, ajuste ${arrQnh}, chama livrando, obrigado, ${cs}.`,
+                            `Autorizado o pouso na ${arrRwy}, QNH ${arrQnh}, reporta livre, ${cs}.`,
+                            `Ciente, pouso autorizado na pista ${arrRwy} com ajuste ${arrQnh}, reportaremos livrando a pista, obrigado, ${cs}.`,
+                            `Pouso autorizado ${arrRwy}, ajuste ${arrQnh}, chama fora da pista, ${cs}.`,
+                            `Pouso autorizado pista ${arrRwy}, ajuste ${arrQnh}, vai reportar livrando a pista o ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrArrCall}, o ${cs} livrou a pista ${arrRwy}.`,
+                            `${twrArrCall}, pista ${arrRwy} livre, ${cs}.`,
+                            `${twrArrCall}, o ${cs} informa na frequência que a pista ${arrRwy} encontra-se livre.`,
+                            `${twrArrCall}, ${cs} fora da ${arrRwy}.`,
+                            `${twrArrCall}, ${cs} informa pista livre.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // ========================================================================
+            // 7. TÁXI PARA O ESTACIONAMENTO (5 ESTILOS REAIS COM TORRE)
+            // ========================================================================
+            if (phaseId === 'taxi_chegada') {
+                const inputArrTwy = `<input type="text" data-atc-field="arrTaxiways" value="${state.arrTaxiways}" placeholder="Ex: C, D" oninput="atualizarInputTorre('arrTaxiways', this.value)" class="inline-atc-input w-28 text-center uppercase">`;
+                const inputArrGate = `<input type="text" data-atc-field="arrGate" value="${state.arrGate}" placeholder="Gate" oninput="atualizarInputTorre('arrGate', this.value)" class="inline-atc-input w-20 text-center uppercase">`;
+                const arrTwyBadge = fmt(state.arrTaxiways, 'arrTaxiways');
+                const arrGateBadge = fmt(state.arrGate, 'arrGate');
+
+                if (lang === 'EN') {
+                    return [
+                        { role: 'ATC', station: arrTowerTitle, text: `Roger ${atcCs}, welcome to ${state.arrName}, continue taxi via ${inputArrTwy} to stand ${inputArrGate}.` },
+                        { role: 'PILOT', text: [
+                            `Taxiing via ${arrTwyBadge} to stand ${arrGateBadge}, we'll stay with you until shutdown, ${cs}.`,
+                            `Via ${arrTwyBadge} to gate ${arrGateBadge}, monitoring until cutoff, ${cs}.`,
+                            `Thank you, continuing taxi via ${arrTwyBadge} to stand ${arrGateBadge} and will report engine shutdown, ${cs}.`,
+                            `Via ${arrTwyBadge} to stand ${arrGateBadge}, ${cs}.`,
+                            `Will continue taxi via ${arrTwyBadge} to stand ${arrGateBadge}, will monitor the frequency until engine shutdown, ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrArrCall}, ${cs} parked on stand ${arrGateBadge}, engines shut down.`,
+                            `${twrArrCall}, ${cs} at gate ${arrGateBadge}, engines cut.`,
+                            `${twrArrCall}, ${cs} is parked on stand ${arrGateBadge} with engines shut down.`,
+                            `${twrArrCall}, ${cs} on blocks at ${arrGateBadge}, shutdown complete.`,
+                            `${twrArrCall}, ${cs} reports engine shutdown at stand ${arrGateBadge}.`
+                        ][v] },
+                        { role: 'ATC', station: arrTowerTitle, text: `Roger ${atcCs}, coordinate now on free frequency UNICOM, 122.800, see you next time.` },
+                        { role: 'PILOT', text: [
+                            `Switching to UNICOM 122.800, thanks for the great ATC, see you next time, ${cs}!`,
+                            `122.800, thanks for the help, good day, ${cs}.`,
+                            `We will switch to UNICOM 122.800, thank you very much for your service today, ${cs}!`,
+                            `Going to 122.800, thanks, bye-bye, ${cs}.`,
+                            `Will coordinate on free frequency UNICOM, 122.800, ${cs}, thank you for the ATC, see you next time.`
+                        ][v] }
+                    ];
+                } else {
+                    return [
+                        { role: 'ATC', station: arrTowerTitle, text: `Ciente ${atcCs}, bem-vindo a ${state.arrName}, prossiga o táxi via ${inputArrTwy} até a posição ${inputArrGate}.` },
+                        { role: 'PILOT', text: [
+                            `Prossegue no táxi via ${arrTwyBadge} até a posição ${arrGateBadge}, mantém na escuta até o corte, ${cs}.`,
+                            `Via ${arrTwyBadge} pro box ${arrGateBadge}, chama no corte, ${cs}.`,
+                            `Obrigado, prosseguiremos no táxi via ${arrTwyBadge} até a posição ${arrGateBadge} mantendo a escuta até o corte dos motores, ${cs}.`,
+                            `Segue via ${arrTwyBadge} até a ${arrGateBadge}, ${cs}.`,
+                            `Vai prosseguir com o táxi via ${arrTwyBadge} até a posição ${arrGateBadge}, vai manter na escuta da frequência até o corte dos motores o ${cs}.`
+                        ][v] },
+                        { role: 'PILOT', text: [
+                            `${twrArrCall}, ${cs} calçado na posição ${arrGateBadge}, motores em corte.`,
+                            `${twrArrCall}, ${cs} no box ${arrGateBadge}, corte efetuado.`,
+                            `${twrArrCall}, o ${cs} informa estacionado na posição ${arrGateBadge} com os motores cortados.`,
+                            `${twrArrCall}, ${cs} na ${arrGateBadge}, motores cortados.`,
+                            `${twrArrCall}, ${cs} informa o corte dos motores na posição ${arrGateBadge}.`
+                        ][v] },
+                        { role: 'ATC', station: arrTowerTitle, text: `Ciente ${atcCs}, coordene agora na frequência livre UNICOM, 122.800, até a próxima.` },
+                        { role: 'PILOT', text: [
+                            `Passando para a UNICOM 122.800, muito obrigado pelo controle e bom turno, ${cs}!`,
+                            `Na livre 122.800, obrigado pelo apoio, até a próxima, ${cs}.`,
+                            `Ciente, coordenaremos na frequência livre UNICOM 122.800, excelente trabalho e até o próximo voo, ${cs}!`,
+                            `Vai pra 122.800 o ${cs}, valeu pelo controle, bom descanso!`,
+                            `Vai coordenar na frequência livre UNICOM, 122.800 o ${cs}, obrigado pelo controle, até a próxima.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            return [];
+        }
+
+        // ============================================================================
+        // COORDENAÇÃO LIVRE UNICOM 122.800 COM 5 ESTILOS REAIS + CARTÕES À ESQUERDA
+        // ============================================================================
+        function construirDialogosUnicomInterativo(phaseId, lang, v) {
+            const cs = fmtCs(true);
+            const depName = fmt(state.depName, 'inp-dep-name');
+            const arrName = fmt(state.arrName, 'inp-arr-name');
+            const depGate = fmt(state.depGate, 'depGate');
+            const depRwy = fmt(state.depRwy, 'inp-dep-rwy');
+            const depQnh = fmt(state.depQnh, 'inp-dep-qnh');
+            const arrRwy = fmt(state.arrRwy, 'inp-arr-rwy');
+            const arrQnh = fmt(state.arrQnh, 'inp-arr-qnh');
+            const fl = fmt(state.cruiseFl, 'inp-fl');
+            const sid = fmt(state.sid, 'inp-sid');
+            const sidTrans = fmt(state.sidTrans, 'inp-sid-trans');
+            const tailBadge = fmt(state.pushTailDir, 'pushTailDir');
+            const depTwyBadge = fmt(state.depTaxiways, 'depTaxiways');
+            const passAltBadge = fmt(state.passingAlt, 'passingAlt');
+            const descFlBadge = fmt(state.assignedDescFl, 'assignedDescFl');
+            const appProc = fmtAppProcedure(true);
+            const vacatedTwyBadge = state.vacatedTaxiway ? ` via taxiway <span class="filled-badge">${state.vacatedTaxiway}</span>` : '';
+            const vacatedTwyEn = state.vacatedTaxiway ? ` via taxiway <span class="filled-badge">${state.vacatedTaxiway}</span>` : '';
+            const arrTwyBadge = fmt(state.arrTaxiways, 'arrTaxiways');
+            const arrGate = fmt(state.arrGate, 'arrGate');
+
+            // 1. AUTORIZAÇÃO / PREPARAÇÃO NO PÁTIO EM UNICOM (5 ESTILOS)
+            if (phaseId === 'autorizacao') {
+                const helperHtml = `
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Posição / Gate Saída</label>
+                            <input type="text" data-atc-field="depGate" value="${state.depGate}" placeholder="Ex: 04" oninput="atualizarInputTorre('depGate', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Pista de Saída</label>
+                            <input type="text" data-atc-field="depRwy" value="${state.depRwy}" placeholder="Ex: 07" oninput="atualizarInputTorre('depRwy', this.value)" class="unicom-input uppercase">
+                        </div>
+                    </div>
+                `;
+                return [
+                    { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Plano & Pátio', html: helperHtml },
+                    { role: 'UNICOM', text: lang === 'EN'
+                        ? [
+                            `${depName} traffic, ${cs} (${state.aircraft}) on stand ${depGate}, preparing for ${state.flightRules} flight to ${arrName}, FL${fl}, planned departure runway ${depRwy} via ${sid}.`,
+                            `${depName} traffic, ${cs} at gate ${depGate}, flight plan ${state.flightRules} to ${arrName} FL${fl}, departing runway ${depRwy}.`,
+                            `Attention ${depName} traffic, ${cs} is parked on stand ${depGate}, preparing for ${state.flightRules} service to ${arrName} at flight level ${fl}, runway ${depRwy} via ${sid} (${sidTrans}).`,
+                            `${depName} traffic, ${cs} stand ${depGate}, outbound ${arrName} FL${fl} off rwy ${depRwy}.`,
+                            `${depName} traffic, ${cs} (${state.aircraft}) at stand ${depGate}, preparing for ${state.flightRules} flight to ${arrName}, flight level ${fl}, departure runway ${depRwy} via ${sid} (${sidTrans}).`
+                        ][v]
+                        : [
+                            `Tráfego de ${depName}, é o ${cs} (${state.aircraft}) na posição ${depGate}, em preparação para voo ${state.flightRules} com destino a ${arrName} no nível ${fl}, previsão de saída pista ${depRwy} na ${sid}.`,
+                            `Coordenação de ${depName}, ${cs} no box ${depGate}, plano ${state.flightRules} para ${arrName} nível ${fl}, pista em uso ${depRwy}.`,
+                            `Atenção tráfego na coordenação de ${depName}, o ${cs} encontra-se na posição ${depGate} preparando saída ${state.flightRules} para ${arrName} no nível de voo ${fl}, perfil ${sid} (${sidTrans}) da pista ${depRwy}.`,
+                            `Tráfego ${depName}, ${cs} na ${depGate}, saída prevista pista ${depRwy} na ${sid} pro ${fl} destino ${arrName}.`,
+                            `Tráfego de ${depName}, ${cs} na posição ${depGate}, iniciando preparativos para voo ${state.flightRules} com destino a ${arrName} no nível de voo ${fl}, previsão de saída pista ${depRwy} no perfil ${sid} com transição ${sidTrans}.`
+                        ][v]
+                    }
+                ];
+            }
+
+            // 2. PUSHBACK, ACIONAMENTO E TÁXI DE SAÍDA EM UNICOM (5 ESTILOS)
+            if (phaseId === 'push_taxi') {
+                const helperHtml = `
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Posição / Gate</label>
+                            <input type="text" data-atc-field="depGate" value="${state.depGate}" placeholder="Ex: 04" oninput="atualizarInputTorre('depGate', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Cauda Pushback</label>
+                            <input type="text" list="push-tail-list" data-atc-field="pushTailDir" value="${state.pushTailDir}" placeholder="DIREITA / ESQ" oninput="atualizarInputTorre('pushTailDir', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Táxi Via (Taxiways)</label>
+                            <input type="text" data-atc-field="depTaxiways" value="${state.depTaxiways}" placeholder="Ex: A, B" oninput="atualizarInputTorre('depTaxiways', this.value)" class="unicom-input uppercase">
+                        </div>
+                    </div>
+                `;
+                if (lang === 'EN') {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Pushback e Táxi de Saída', html: helperHtml },
+                        { role: 'UNICOM', text: `${depName} traffic, ${cs} pushing back and starting engines at stand ${depGate}, facing tail ${tailBadge}.` },
+                        { role: 'UNICOM', text: `${depName} traffic, ${cs} taxiing via ${depTwyBadge} to holding point runway ${depRwy}.` },
+                        { role: 'UNICOM', text: `${depName} traffic, ${cs} holding short of runway ${depRwy}, ready for departure.` }
+                    ];
+                } else {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Pushback e Táxi de Saída', html: helperHtml },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${depName}, o ${cs} inicia pushback e acionamento na posição ${depGate} com cauda à ${tailBadge}.`,
+                            `Coordenação ${depName}, ${cs} recuando do box ${depGate} cauda à ${tailBadge} e acionando.`,
+                            `Atenção tráfego de ${depName}, o ${cs} está iniciando o recuo e acionamento dos motores na posição ${depGate}, orientando cauda à ${tailBadge}.`,
+                            `Tráfego ${depName}, ${cs} em push e acionamento na ${depGate}, cauda à ${tailBadge}.`,
+                            `Tráfego de ${depName}, ${cs} iniciando pushback e acionamento na posição ${depGate}, com cauda à ${tailBadge}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${depName}, o ${cs} inicia o táxi via ${depTwyBadge} para o ponto de espera da pista ${depRwy}.`,
+                            `Coordenação ${depName}, ${cs} taxiando via ${depTwyBadge} até o ponto de espera da ${depRwy}.`,
+                            `Tráfego de ${depName}, o ${cs} prossegue no táxi via ${depTwyBadge} com destino ao ponto de espera da cabeceira ${depRwy}.`,
+                            `Tráfego ${depName}, ${cs} rodando via ${depTwyBadge} pro ponto de espera da ${depRwy}.`,
+                            `Tráfego de ${depName}, ${cs} iniciando o táxi via ${depTwyBadge} até o ponto de espera da pista ${depRwy}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${depName}, ${cs} atingindo o ponto de espera da pista ${depRwy}, pronto para alinhar.`,
+                            `Coordenação ${depName}, ${cs} no ponto de espera da ${depRwy}.`,
+                            `Tráfego de ${depName}, o ${cs} encontra-se no ponto de espera da pista ${depRwy}, pronto para ingresso e decolagem.`,
+                            `Tráfego ${depName}, ${cs} curto da ${depRwy}, pronto.`,
+                            `Tráfego de ${depName}, ${cs} no ponto de espera da pista ${depRwy}, pronto para ingressar e decolar.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // 3. DECOLAGEM (MENSAGEM QUE ALINHA E DECOLA + PÓS-DECOLAGEM - 5 ESTILOS)
+            if (phaseId === 'decolagem') {
+                const helperHtml = `
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Pista em Uso</label>
+                            <input type="text" data-atc-field="depRwy" value="${state.depRwy}" placeholder="07" oninput="atualizarInputTorre('depRwy', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Perfil SID</label>
+                            <input type="text" data-atc-field="sid" value="${state.sid}" placeholder="VULA2A" oninput="atualizarInputTorre('sid', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Ajuste QNH</label>
+                            <input type="text" data-atc-field="depQnh" value="${state.depQnh}" placeholder="1013" oninput="atualizarInputTorre('depQnh', this.value)" class="unicom-input">
+                        </div>
+                    </div>
+                `;
+                if (lang === 'EN') {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Alinhamento e Decolagem', html: helperHtml },
+                        { role: 'UNICOM', text: `${depName} traffic, ${cs} lining up and taking off runway ${depRwy}, departing on ${sid} progression, QNH ${depQnh}.` },
+                        { role: 'UNICOM', text: `${depName} traffic, ${cs} airborne from runway ${depRwy}, climbing on ${sid} departure to flight level ${fl}.` }
+                    ];
+                } else {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Alinhamento e Decolagem', html: helperHtml },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${depName}, o ${cs} alinha e decola da pista ${depRwy}, cumprindo a saída ${sid}, ajuste ${depQnh}.`,
+                            `Coordenação ${depName}, ${cs} alinhando e decolando da ${depRwy} na saída ${sid}, QNH ${depQnh}.`,
+                            `Atenção tráfego de ${depName}, o ${cs} está ingressando na pista ${depRwy}, alinha e inicia corrida de decolagem para o perfil ${sid}, ajuste ${depQnh}.`,
+                            `Tráfego ${depName}, ${cs} alinha e gira na ${depRwy}, saída ${sid}.`,
+                            `Tráfego de ${depName}, ${cs} alinha e decola da pista ${depRwy}, cumprindo perfil de saída ${sid}, ajuste ${depQnh}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${depName}, ${cs} no ar da pista ${depRwy}, subindo no perfil ${sid} para o nível ${fl}.`,
+                            `Coordenação ${depName}, ${cs} fora do solo da ${depRwy} na ${sid} pro nível ${fl}.`,
+                            `Tráfego de ${depName}, o ${cs} informa decolado da pista ${depRwy}, cumprindo a saída ${sid} com transição ${sidTrans} para o nível de voo ${fl}.`,
+                            `Tráfego ${depName}, ${cs} decolado da ${depRwy}, subindo na ${sid}.`,
+                            `Tráfego de ${depName}, ${cs} decolado da pista ${depRwy}, em subida no perfil ${sid} para o nível de voo ${fl}.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // 4. EM SUBIDA EM UNICOM (5 ESTILOS)
+            if (phaseId === 'subida') {
+                const helperHtml = `
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Passando Altitude (Pés)</label>
+                            <input type="text" data-atc-field="passingAlt" value="${state.passingAlt}" placeholder="Ex: 5000" oninput="atualizarInputTorre('passingAlt', this.value)" class="unicom-input">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Para o Nível de Voo (FL)</label>
+                            <input type="text" data-atc-field="cruiseFl" value="${state.cruiseFl}" placeholder="Ex: 290" oninput="atualizarInputTorre('cruiseFl', this.value)" class="unicom-input">
+                        </div>
+                    </div>
+                `;
+                if (lang === 'EN') {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Subida e Nivelamento', html: helperHtml },
+                        { role: 'UNICOM', text: `${depName} traffic, ${cs} on ${sid} departure, passing ${passAltBadge} feet climbing to flight level ${fl}.` },
+                        { role: 'UNICOM', text: `All traffic on UNICOM, ${cs} level at flight level ${fl} en route to ${arrName}.` }
+                    ];
+                } else {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Subida e Nivelamento', html: helperHtml },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${depName}, é o ${cs} na saída ${sid}, passando ${passAltBadge} pés para o nível ${fl}.`,
+                            `Coordenação ${depName}, ${cs} cruzando ${passAltBadge} pés na ${sid} pro nível ${fl}.`,
+                            `Atenção tráfego de ${depName}, o ${cs} cumpre o perfil de saída ${sid}, passando por ${passAltBadge} pés em subida para o nível de voo ${fl}.`,
+                            `Tráfego ${depName}, ${cs} passando ${passAltBadge} pés subindo pro ${fl}.`,
+                            `Tráfego de ${depName}, ${cs} no perfil de saída ${sid}, passando ${passAltBadge} pés em subida para o nível de voo ${fl}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego na UNICOM, ${cs} atingindo e mantendo o nível de voo ${fl} na rota para ${arrName}.`,
+                            `Coordenação na livre, ${cs} nivelado no ${fl} destino ${arrName}.`,
+                            `Tráfego em rota na UNICOM, o ${cs} informa nivelado no nível de voo ${fl} com destino a ${arrName}.`,
+                            `Tráfego em rota, ${cs} mantendo o ${fl}.`,
+                            `Tráfego na UNICOM, ${cs} atingindo e mantendo o nível de voo ${fl} na rota para ${arrName}.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // 5. EM APROXIMAÇÃO / DESCIDA EM UNICOM (5 ESTILOS)
+            if (phaseId === 'aproximacao') {
+                const helperHtml = `
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Descendo p/ Nível (FL/Alt)</label>
+                            <input type="text" data-atc-field="assignedDescFl" value="${state.assignedDescFl}" placeholder="Ex: 100 ou 5000ft" oninput="atualizarInputTorre('assignedDescFl', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Letra do Procedimento (${state.appType})</label>
+                            <input type="text" data-atc-field="appLetter" value="${state.appLetter}" placeholder="Ex: Z, Y, X, W" maxlength="2" oninput="atualizarInputTorre('appLetter', this.value)" class="unicom-input uppercase text-center">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Pista Pouso Destino</label>
+                            <input type="text" data-atc-field="arrRwy" value="${state.arrRwy}" placeholder="11" oninput="atualizarInputTorre('arrRwy', this.value)" class="unicom-input uppercase text-center">
+                        </div>
+                    </div>
+                `;
+                if (lang === 'EN') {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Descida e Procedimento de Aproximação', html: helperHtml },
+                        { role: 'UNICOM', text: `${arrName} traffic, ${cs} leaving flight level ${fl}, descending to flight level ${descFlBadge} inbound ${arrName}.` },
+                        { role: 'UNICOM', text: `${arrName} traffic, ${cs} starting ${appProc} approach for runway ${arrRwy}, QNH ${arrQnh}.` },
+                        { role: 'UNICOM', text: `${arrName} traffic, ${cs} established on ${appProc} approach, runway ${arrRwy}.` }
+                    ];
+                } else {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Descida e Procedimento de Aproximação', html: helperHtml },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${arrName}, é o ${cs} deixando o nível ${fl} em descida para o nível ${descFlBadge}, chegada para a pista ${arrRwy}.`,
+                            `Coordenação ${arrName}, ${cs} descendo para o nível ${descFlBadge}, previsão de pouso na ${arrRwy}.`,
+                            `Atenção tráfego de ${arrName}, o ${cs} inicia descida do nível ${fl} para o nível de voo ${descFlBadge}, estimando aproximação para a pista ${arrRwy}.`,
+                            `Tráfego ${arrName}, ${cs} em descida pro ${descFlBadge} na chegada da ${arrRwy}.`,
+                            `Tráfego de ${arrName}, ${cs} deixando o nível de voo ${fl}, iniciando descida para o nível de voo ${descFlBadge}, estimado pouso na pista ${arrRwy}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${arrName}, o ${cs} inicia o procedimento ${appProc} para a pista ${arrRwy}, ajuste ${arrQnh}.`,
+                            `Coordenação ${arrName}, ${cs} ingressando no perfil ${appProc} da ${arrRwy}, QNH ${arrQnh}.`,
+                            `Tráfego de ${arrName}, o ${cs} está iniciando o perfil de aproximação ${appProc} para a cabeceira ${arrRwy} com ajuste ${arrQnh}.`,
+                            `Tráfego ${arrName}, ${cs} no perfil ${appProc} da ${arrRwy}.`,
+                            `Tráfego de ${arrName}, ${cs} iniciando o procedimento ${appProc} para a pista ${arrRwy}, ajuste ${arrQnh}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${arrName}, ${cs} estabilizado no ${appProc} da pista ${arrRwy}.`,
+                            `Coordenação ${arrName}, ${cs} estabilizado na final do ${appProc} pista ${arrRwy}.`,
+                            `Tráfego de ${arrName}, o ${cs} encontra-se estabilizado no procedimento ${appProc} para a pista ${arrRwy}.`,
+                            `Tráfego ${arrName}, ${cs} estabelecido no ${appProc} da ${arrRwy}.`,
+                            `Tráfego de ${arrName}, ${cs} estabilizado no ${appProc}, pista ${arrRwy}.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // 6. POUSANDO (FINAL CURTA + MENSAGEM QUE LIVROU A PISTA - 5 ESTILOS)
+            if (phaseId === 'pousando') {
+                const helperHtml = `
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Pista de Pouso</label>
+                            <input type="text" data-atc-field="arrRwy" value="${state.arrRwy}" placeholder="11" oninput="atualizarInputTorre('arrRwy', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Ajuste QNH</label>
+                            <input type="text" data-atc-field="arrQnh" value="${state.arrQnh}" placeholder="1020" oninput="atualizarInputTorre('arrQnh', this.value)" class="unicom-input">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Livrou pela Taxiway (Opcional)</label>
+                            <input type="text" data-atc-field="vacatedTaxiway" value="${state.vacatedTaxiway}" placeholder="Ex: C" oninput="atualizarInputTorre('vacatedTaxiway', this.value)" class="unicom-input uppercase">
+                        </div>
+                    </div>
+                `;
+                if (lang === 'EN') {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Pouso e Pista Livre', html: helperHtml },
+                        { role: 'UNICOM', text: `${arrName} traffic, ${cs} on short final runway ${arrRwy}, gear down and locked, full stop landing.` },
+                        { role: 'UNICOM', text: `${arrName} traffic, ${cs} has vacated runway ${arrRwy}${vacatedTwyEn}, runway is clear.` }
+                    ];
+                } else {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Pouso e Pista Livre', html: helperHtml },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${arrName}, é o ${cs} na curta final da pista ${arrRwy}, trem baixado e travado para o pouso, ajuste ${arrQnh}.`,
+                            `Coordenação ${arrName}, ${cs} na final curta da ${arrRwy}, baixado e travado.`,
+                            `Atenção tráfego de ${arrName}, o ${cs} encontra-se na curta final da pista ${arrRwy}, trem de pouso baixado e travado para pouso completo, QNH ${arrQnh}.`,
+                            `Tráfego ${arrName}, ${cs} curta final da ${arrRwy}, três verdes pro pouso.`,
+                            `Tráfego de ${arrName}, ${cs} na final da pista ${arrRwy}, trem baixado e travado para pouso completo, ajuste ${arrQnh}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${arrName}, o ${cs} livrou a pista ${arrRwy}${vacatedTwyBadge}, pista livre.`,
+                            `Coordenação ${arrName}, pista ${arrRwy} livre pelo ${cs}${vacatedTwyBadge}.`,
+                            `Tráfego de ${arrName}, o ${cs} informa que livrou a pista ${arrRwy}${vacatedTwyBadge}, pista totalmente livre.`,
+                            `Tráfego ${arrName}, ${cs} fora da ${arrRwy}${vacatedTwyBadge}, pista livre.`,
+                            `Tráfego de ${arrName}, ${cs} livrou a pista ${arrRwy}${vacatedTwyBadge}, informa pista livre.`
+                        ][v] }
+                    ];
+                }
+            }
+
+            // 7. TÁXI APÓS O POUSO PARA O ESTACIONAMENTO EM UNICOM (5 ESTILOS)
+            if (phaseId === 'taxi_chegada') {
+                const helperHtml = `
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Táxi Após o Pouso (Via Taxiways)</label>
+                            <input type="text" data-atc-field="arrTaxiways" value="${state.arrTaxiways}" placeholder="Ex: C, D" oninput="atualizarInputTorre('arrTaxiways', this.value)" class="unicom-input uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-amber-300 uppercase font-bold mb-1">Posição / Gate de Chegada</label>
+                            <input type="text" data-atc-field="arrGate" value="${state.arrGate}" placeholder="Ex: 12" oninput="atualizarInputTorre('arrGate', this.value)" class="unicom-input uppercase">
+                        </div>
+                    </div>
+                `;
+                if (lang === 'EN') {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Táxi Após o Pouso e Estacionamento', html: helperHtml },
+                        { role: 'UNICOM', text: `${arrName} traffic, ${cs} taxiing via ${arrTwyBadge} to stand ${arrGate}.` },
+                        { role: 'UNICOM', text: `${arrName} traffic, ${cs} parked at stand ${arrGate}, engines shut down, ending UNICOM coordination.` }
+                    ];
+                } else {
+                    return [
+                        { role: 'UNICOM_HELPER', title: 'Parâmetros UNICOM • Táxi Após o Pouso e Estacionamento', html: helperHtml },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${arrName}, o ${cs} prossegue no táxi via ${arrTwyBadge} até a posição ${arrGate}.`,
+                            `Coordenação ${arrName}, ${cs} taxiando via ${arrTwyBadge} pro box ${arrGate}.`,
+                            `Tráfego de ${arrName}, o ${cs} encontra-se em táxi pelo pátio via ${arrTwyBadge} para estacionamento na posição ${arrGate}.`,
+                            `Tráfego ${arrName}, ${cs} via ${arrTwyBadge} para a posição ${arrGate}.`,
+                            `Tráfego de ${arrName}, ${cs} em táxi após o pouso via ${arrTwyBadge} até a posição ${arrGate}.`
+                        ][v] },
+                        { role: 'UNICOM', text: [
+                            `Tráfego de ${arrName}, ${cs} calçado na posição ${arrGate}, motores em corte, encerrando na UNICOM, bom voo a todos!`,
+                            `Coordenação ${arrName}, ${cs} no box ${arrGate} com motores cortados, encerrando escuta.`,
+                            `Tráfego de ${arrName}, o ${cs} informa estacionado na posição ${arrGate} com motores cortados, encerrando coordenação na 122.800.`,
+                            `Tráfego ${arrName}, ${cs} na ${arrGate}, corte efetuado, até a próxima!`,
+                            `Tráfego de ${arrName}, ${cs} informa o corte dos motores na posição ${arrGate}, encerrando coordenação na UNICOM, bom voo a todos!`
+                        ][v] }
+                    ];
+                }
+            }
+
+            return [];
+        }
+
+        // ============================================================================
+        // RENDERIZAÇÃO DA INTERFACE DE CHAT (PRESERVANDO FOCO NOS INPUTS DA TORRE/UNICOM)
+        // ============================================================================
+        function renderizarMenuFases() {
+            const sideContainer = document.getElementById('sidebar-phases');
+            const mobContainer = document.getElementById('mobile-phases');
+            sideContainer.innerHTML = '';
+            mobContainer.innerHTML = '';
+
+            flightPhases.forEach(p => {
+                const active = state.selectedPhase === p.id;
+
+                const btn = document.createElement('button');
+                btn.onclick = () => selecionarFase(p.id);
+                btn.className = `w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition text-left ${
+                    active
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-950/60'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`;
+                btn.innerHTML = `<i data-lucide="${p.icon}" class="w-4 h-4 shrink-0"></i><span class="truncate">${p.name}</span>`;
+                sideContainer.appendChild(btn);
+
+                const mBtn = document.createElement('button');
+                mBtn.onclick = () => selecionarFase(p.id);
+                mBtn.className = `px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+                    active ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'
+                }`;
+                mBtn.innerText = p.name;
+                mobContainer.appendChild(mBtn);
+            });
+            lucide.createIcons();
+        }
+
+        function selecionarFase(phaseId) {
+            state.selectedPhase = phaseId;
+            renderizarMenuFases();
+            renderizarDialogos();
+            document.getElementById('chat-scroll-container').scrollTop = 0;
+        }
+
+        function renderizarDialogos() {
+            const container = document.getElementById('dialogue-container');
+            container.innerHTML = '';
+
+            const fasesParaExibir = state.selectedPhase === 'ALL'
+                ? flightPhases.filter(p => p.id !== 'ALL')
+                : flightPhases.filter(p => p.id === state.selectedPhase);
+
+            fasesParaExibir.forEach(phase => {
+                const mensagens = construirDialogosPorFase(phase.id);
+
+                const section = document.createElement('div');
+                section.className = 'space-y-4';
+
+                // Pílula Azul Centralizada (Idêntica às referências enviadas!)
+                section.innerHTML = `
+                    <div class="flex justify-center my-4">
+                        <div class="bg-blue-500 text-white px-5 py-1.5 rounded-lg text-xs md:text-sm font-bold shadow-lg shadow-blue-950/50 flex items-center gap-2">
+                            <span>${phase.name.replace(/^\d+\.\s*/, '')}</span>
+                        </div>
+                    </div>
+                `;
+
+                mensagens.forEach((msg) => {
+                    const row = document.createElement('div');
+
+                    if (msg.role === 'PILOT' || msg.role === 'UNICOM') {
+                        const isUnicom = msg.role === 'UNICOM';
+                        row.className = 'flex items-start justify-end gap-3 pl-6 md:pl-20';
+                        row.innerHTML = `
+                            <div class="${isUnicom ? 'unicom-bubble' : 'pilot-bubble'} text-slate-100 px-4 py-3 rounded-2xl rounded-tr-sm max-w-3xl relative group">
+                                ${isUnicom ? '<div class="text-[10px] font-mono uppercase text-blue-300 font-bold mb-1 flex items-center gap-1.5"><i data-lucide="radio" class="w-3 h-3"></i><span>Coordenação Livre • UNICOM 122.800</span></div>' : ''}
+                                <div class="text-sm md:text-[15px] leading-relaxed font-medium select-text pilot-speech-text">${msg.text}</div>
+                                <div class="flex items-center justify-end gap-2 mt-1.5 opacity-80 group-hover:opacity-100 transition">
+                                    <button onclick="copiarFala(this)" class="text-slate-300 hover:text-white p-1 rounded" title="Copiar fala">
+                                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                    <button onclick="falarTexto(this)" class="text-slate-300 hover:text-emerald-400 p-1 rounded" title="Ouvir pronúncia da fala">
+                                        <i data-lucide="volume-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-md" title="Piloto em Comando">
+                                <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 3L2 8l10 4 10-4-10-5zm-7 7.5v2.5c0 2.5 3.1 4.5 7 4.5s7-2 7-4.5v-2.5l-7 2.8-7-2.8z"/>
+                                </svg>
+                            </div>
+                        `;
+                    } else if (msg.role === 'ATC') {
+                        row.className = 'flex items-start justify-start gap-3 pr-6 md:pr-20';
+                        row.innerHTML = `
+                            <div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-md" title="Torre / Controle ATC">
+                                <i data-lucide="radio-tower" class="w-5 h-5 text-sky-400"></i>
+                            </div>
+                            <div class="atc-bubble px-4 py-3 rounded-2xl rounded-tl-sm max-w-3xl">
+                                <div class="text-sm md:text-[15px] leading-relaxed font-medium select-text">${msg.text}</div>
+                                <div class="mt-2 pt-1.5 border-t border-slate-300/80 flex items-center justify-between text-[11px] text-slate-600 font-semibold">
+                                    <span>${msg.station}</span>
+                                    <span class="text-[10px] text-blue-700 font-mono">Resposta Provável da Torre</span>
+                                </div>
+                            </div>
+                        `;
+                    } else if (msg.role === 'UNICOM_HELPER') {
+                        row.className = 'flex items-start justify-start gap-3 pr-6 md:pr-20';
+                        row.innerHTML = `
+                            <div class="w-9 h-9 rounded-full bg-blue-950 border border-blue-500/50 flex items-center justify-center shrink-0 shadow-md" title="Preenchimento Rápido UNICOM">
+                                <i data-lucide="sliders" class="w-4 h-4 text-blue-400"></i>
+                            </div>
+                            <div class="unicom-helper-card px-4 py-3 rounded-2xl rounded-tl-sm w-full max-w-xl">
+                                <div class="text-[11px] font-bold uppercase tracking-wider text-blue-400 mb-2 flex items-center justify-between">
+                                    <span>${msg.title}</span>
+                                    <span class="text-[10px] font-mono text-amber-300">Preencha para atualizar as falas</span>
+                                </div>
+                                ${msg.html}
+                            </div>
+                        `;
+                    }
+
+                    section.appendChild(row);
+                });
+
+                container.appendChild(section);
+            });
+
+            lucide.createIcons();
+        }
+
+        // Atualiza qualquer input dentro dos balões da Torre ou Cartões UNICOM mantendo o cursor!
+        function atualizarInputTorre(chave, valor) {
+            state[chave] = valor.toUpperCase();
+
+            // Sincroniza também com os inputs do painel superior (Saída / Chegada)
+            const topInputMap = {
+                depGate: 'inp-dep-gate',
+                depRwy: 'inp-dep-rwy',
+                depQnh: 'inp-dep-qnh',
+                sid: 'inp-sid',
+                pushTailDir: 'inp-push-tail',
+                depTaxiways: 'inp-dep-taxiways',
+                cruiseFl: 'inp-fl',
+                appLetter: 'inp-app-letter',
+                arrRwy: 'inp-arr-rwy',
+                arrQnh: 'inp-arr-qnh',
+                assignedDescFl: 'inp-desc-fl',
+                arrTaxiways: 'inp-arr-taxiways',
+                arrGate: 'inp-arr-gate'
+            };
+            if (topInputMap[chave]) {
+                const topEl = document.getElementById(topInputMap[chave]);
+                if (topEl) topEl.value = state[chave];
+            }
+
+            atualizarContadorCamposFaltantes();
+
+            const activeEl = document.activeElement;
+            const fieldAttr = activeEl ? activeEl.getAttribute('data-atc-field') : null;
+            const cursorStart = (activeEl && typeof activeEl.selectionStart === 'number') ? activeEl.selectionStart : null;
+
+            renderizarDialogos();
+
+            if (fieldAttr) {
+                const restoredInput = document.querySelector(`[data-atc-field="${fieldAttr}"]`);
+                if (restoredInput) {
+                    restoredInput.focus();
+                    if (cursorStart !== null && typeof restoredInput.setSelectionRange === 'function') {
+                        restoredInput.setSelectionRange(cursorStart, cursorStart);
+                    }
+                }
+            }
+        }
+
+        // ============================================================================
+        // CONTROLES DE IDIOMA DAS FALAS, VARIAÇÃO, REDE E ÁUDIO (TTS)
+        // ============================================================================
+        function setIdiomaFalas(lang) {
+            state.speechLang = lang;
+            document.getElementById('lang-pt').className = `px-2.5 py-1 rounded-md font-bold flex items-center gap-1 transition ${lang === 'PT' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('lang-en').className = `px-2.5 py-1 rounded-md font-bold flex items-center gap-1 transition ${lang === 'EN' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`;
+            renderizarDialogos();
+            mostrarToast(lang === 'EN' ? 'Falas traduzidas para Inglês ICAO (Interface mantida em Português)' : 'Falas em Português (Padrão DECEA)', 'info');
+        }
+
+        function sortearVariacao() {
+            state.variationIndex = (state.variationIndex + 1) % 5;
+            document.getElementById('variation-badge').innerText = `${state.variationIndex + 1}/5`;
+            const sel = document.getElementById('style-selector');
+            if (sel) sel.value = String(state.variationIndex);
+            renderizarDialogos();
+            mostrarToast(speechStyleNames[state.variationIndex], 'success');
+        }
+
+        function selecionarEstiloFala(idxStr) {
+            state.variationIndex = parseInt(idxStr, 10) || 0;
+            document.getElementById('variation-badge').innerText = `${state.variationIndex + 1}/5`;
+            renderizarDialogos();
+            mostrarToast(speechStyleNames[state.variationIndex], 'success');
+        }
+
+        function setModoATC(modo) {
+            state.atcMode = modo;
+            document.getElementById('mode-online').className = `px-2.5 py-1 rounded-md font-bold transition ${modo === 'ONLINE' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('mode-auto').className = `px-2 py-1 rounded-md font-semibold transition ${modo === 'AUTO' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('mode-unicom').className = `px-2.5 py-1 rounded-md font-bold transition ${modo === 'UNICOM' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`;
+            renderizarPainelAtc();
+            renderizarDialogos();
+        }
+
+        function setRede(rede) {
+            state.network = rede;
+            document.getElementById('net-ivao').className = `px-2 py-1 rounded-md font-bold transition ${rede === 'IVAO' ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('net-vatsim').className = `px-2 py-1 rounded-md font-bold transition ${rede === 'VATSIM' ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'}`;
+            verificarRedesOnline();
+        }
+
+        function togglePainelDados() {
+            state.briefingOpen = !state.briefingOpen;
+            const panel = document.getElementById('briefing-panel');
+            const chevron = document.getElementById('icon-chevron-briefing');
+            if (state.briefingOpen) {
+                panel.classList.remove('hidden');
+                chevron.setAttribute('data-lucide', 'chevron-up');
+            } else {
+                panel.classList.add('hidden');
+                chevron.setAttribute('data-lucide', 'chevron-down');
+            }
+            lucide.createIcons();
+        }
+
+        function togglePainelAtc() {
+            state.atcPanelOpen = !state.atcPanelOpen;
+            const panel = document.getElementById('atc-available-panel');
+            if (state.atcPanelOpen) {
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        function falarTexto(btn) {
+            if (!('speechSynthesis' in window)) {
+                mostrarToast('Seu navegador não suporta síntese de voz.', 'error');
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const speechEl = btn.closest('div.pilot-bubble, div.unicom-bubble').querySelector('.pilot-speech-text');
+            const clone = speechEl.cloneNode(true);
+            clone.querySelectorAll('input').forEach(inp => {
+                const span = document.createElement('span');
+                span.innerText = inp.value || 'não informado';
+                inp.replaceWith(span);
+            });
+            const utter = new SpeechSynthesisUtterance(clone.innerText);
+            utter.lang = state.speechLang === 'EN' ? 'en-US' : 'pt-BR';
+            utter.rate = 1.02;
+            window.speechSynthesis.speak(utter);
+        }
+
+        function copiarFala(btn) {
+            const speechEl = btn.closest('div.pilot-bubble, div.unicom-bubble').querySelector('.pilot-speech-text');
+            const clone = speechEl.cloneNode(true);
+            clone.querySelectorAll('input').forEach(inp => {
+                const span = document.createElement('span');
+                span.innerText = inp.value || '(NÃO INFORMADO)';
+                inp.replaceWith(span);
+            });
+            const textarea = document.createElement('textarea');
+            textarea.value = clone.innerText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                mostrarToast('Fala copiada para a área de transferência!', 'success');
+            } catch (e) {
+                mostrarToast('Erro ao copiar fala.', 'error');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        function mostrarToast(msg, tipo = 'info') {
+            const toast = document.getElementById('toast');
+            const text = document.getElementById('toast-text');
+            const icon = document.getElementById('toast-icon');
+            text.innerText = msg;
+
+            if (tipo === 'error') {
+                icon.setAttribute('data-lucide', 'alert-triangle');
+                icon.className = 'w-4 h-4 text-rose-400';
+            } else if (tipo === 'success') {
+                icon.setAttribute('data-lucide', 'check-circle');
+                icon.className = 'w-4 h-4 text-emerald-400';
+            } else {
+                icon.setAttribute('data-lucide', 'info');
+                icon.className = 'w-4 h-4 text-blue-400';
+            }
+            lucide.createIcons();
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3800);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
